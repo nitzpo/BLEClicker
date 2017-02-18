@@ -79,7 +79,6 @@
 #include "rcosc_calibration.h"
 #endif //USE_RCOSC
 
-#include <ti/mw/display/Display.h>
 #include <xdc/runtime/Log.h>
 #include <xdc/runtime/Diags.h>
 
@@ -157,8 +156,6 @@ typedef struct
  * GLOBAL VARIABLES
  */
 
-// Display Interface
-Display_Handle dispHandle = NULL;
 
 /*********************************************************************
  * LOCAL VARIABLES
@@ -373,8 +370,6 @@ static void SimpleBLEPeripheral_init(void)
   Util_constructClock(&periodicClock, SimpleBLEPeripheral_clockHandler,
                       SBP_PERIODIC_EVT_PERIOD, 0, false, SBP_PERIODIC_EVT);
 
-  dispHandle = Display_open(Display_Type_UART, NULL);
-
   // Setup the GAP
   GAP_SetParamValue(TGAP_CONN_PAUSE_PERIPHERAL, DEFAULT_CONN_PAUSE_PERIPHERAL);
 
@@ -400,12 +395,10 @@ static void SimpleBLEPeripheral_init(void)
     GAPRole_SetParameter(GAPROLE_ADVERT_OFF_TIME, sizeof(uint16_t),
                          &advertOffTime);
 
-    GAPRole_SetParameter(GAPROLE_SCAN_RSP_DATA, sizeof(scanRspData),
-                         scanRspData);
+    GAPRole_SetParameter(GAPROLE_SCAN_RSP_DATA, sizeof(scanRspData), scanRspData);
     GAPRole_SetParameter(GAPROLE_ADVERT_DATA, sizeof(advertData), advertData);
 
-    Log_info1("Name in advertData array: \x1b[33m%s\x1b[0m",
-                (IArg)Util_getLocalNameStr(advertData));
+    //Log_info1("Name in advertData array: \x1b[33m%s\x1b[0m", (IArg)Util_getLocalNameStr(advertData));
 
     GAPRole_SetParameter(GAPROLE_PARAM_UPDATE_ENABLE, sizeof(uint8_t),
                          &enableUpdateRequest);
@@ -482,7 +475,7 @@ static void SimpleBLEPeripheral_init(void)
 
   /** HidDev **/
   Log_info0("Registering Hid Device");
-  HidDev_Register(&clicker_hidDevCfg, &clicker_CBs);
+  // HidDev_Register(&clicker_hidDevCfg, &clicker_CBs);
 
   /** Hid Keyboard **/
   // HidKbd_AddService();
@@ -531,7 +524,9 @@ static void SimpleBLEPeripheral_taskFxn(UArg a0, UArg a1)
     // Note that the semaphore associated with a thread is signaled when a
     // message is queued to the message receive queue of the thread or when
     // ICall_signal() function is called onto the semaphore.
+    Log_info0("SBP is waiting for messages");
     ICall_Errno errno = ICall_wait(ICALL_TIMEOUT_FOREVER);
+    Log_info0("A message was queued for SimpleBLEPeripheral task");
 
     if (errno == ICALL_ERRNO_SUCCESS)
     {
@@ -823,6 +818,7 @@ static void SimpleBLEPeripheral_processAppMsg(sbpEvt_t *pMsg)
  */
 static void SimpleBLEPeripheral_stateChangeCB(gaprole_States_t newState)
 {
+  Log_info1("(CB) GAP State change: %d, Sending msg to app.", (IArg)newState);
   SimpleBLEPeripheral_enqueueMsg(SBP_STATE_CHANGE_EVT, newState);
 }
 
@@ -963,18 +959,12 @@ static void SimpleBLEPeripheral_processStateChangeEvt(gaprole_States_t newState)
       SimpleBLEPeripheral_freeAttRsp(bleNotConnected);
 
       Log_info0("Disconnected");
-
-      // Clear remaining lines
-      Display_clearLines(dispHandle, 3, 5);
       break;
 
     case GAPROLE_WAITING_AFTER_TIMEOUT:
       SimpleBLEPeripheral_freeAttRsp(bleNotConnected);
 
       Log_info0("Timed Out");
-
-      // Clear remaining lines
-      Display_clearLines(dispHandle, 3, 5);
 
       #ifdef PLUS_BROADCASTER
         // Reset flag for next connection.
@@ -987,7 +977,6 @@ static void SimpleBLEPeripheral_processStateChangeEvt(gaprole_States_t newState)
       break;
 
     default:
-      Display_clearLine(dispHandle, 2);
       break;
   }
 
@@ -1008,7 +997,8 @@ static void SimpleBLEPeripheral_processStateChangeEvt(gaprole_States_t newState)
  */
 static void SimpleBLEPeripheral_charValueChangeCB(uint8_t paramID)
 {
-  SimpleBLEPeripheral_enqueueMsg(SBP_CHAR_CHANGE_EVT, paramID);
+    // Log_info1("Char value change CB called, paramID: %d", paramID);
+    SimpleBLEPeripheral_enqueueMsg(SBP_CHAR_CHANGE_EVT, paramID);
 }
 
 /*********************************************************************
