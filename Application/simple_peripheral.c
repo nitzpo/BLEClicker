@@ -63,10 +63,9 @@
 #include "devinfoservice.h"
 #include "simple_gatt_profile.h"
 
-#if defined(FEATURE_OAD) || defined(IMAGE_INVALIDATE)
-#include "oad_target.h"
-#include "oad.h"
-#endif //FEATURE_OAD || IMAGE_INVALIDATE
+// HOGP
+#include "hiddev.h"
+#include "hidkbdservice.h"
 
 #include "peripheral.h"
 #include "gapbondmgr.h"
@@ -81,15 +80,14 @@
 #endif //USE_RCOSC
 
 #include <ti/mw/display/Display.h>
+#include <xdc/runtime/Log.h>
+#include <xdc/runtime/Diags.h>
+
 #include "board_key.h"
 
 #include "board.h"
 
 #include "simple_peripheral.h"
-
-#if defined( USE_FPGA ) || defined( DEBUG_SW_TRACE )
-#include <driverlib/ioc.h>
-#endif // USE_FPGA | DEBUG_SW_TRACE
 
 /*********************************************************************
  * CONSTANTS
@@ -102,7 +100,6 @@
 // General discoverable mode advertises indefinitely
 #define DEFAULT_DISCOVERABLE_MODE             GAP_ADTYPE_FLAGS_GENERAL
 
-#ifndef FEATURE_OAD
 // Minimum connection interval (units of 1.25ms, 80=100ms) if automatic
 // parameter update request is enabled
 #define DEFAULT_DESIRED_MIN_CONN_INTERVAL     80
@@ -110,15 +107,6 @@
 // Maximum connection interval (units of 1.25ms, 800=1000ms) if automatic
 // parameter update request is enabled
 #define DEFAULT_DESIRED_MAX_CONN_INTERVAL     800
-#else //!FEATURE_OAD
-// Minimum connection interval (units of 1.25ms, 8=10ms) if automatic
-// parameter update request is enabled
-#define DEFAULT_DESIRED_MIN_CONN_INTERVAL     8
-
-// Maximum connection interval (units of 1.25ms, 8=10ms) if automatic
-// parameter update request is enabled
-#define DEFAULT_DESIRED_MAX_CONN_INTERVAL     8
-#endif // FEATURE_OAD
 
 // Slave latency to use if automatic parameter update request is enabled
 #define DEFAULT_DESIRED_SLAVE_LATENCY         0
@@ -137,11 +125,6 @@
 // How often to perform periodic event (in msec)
 #define SBP_PERIODIC_EVT_PERIOD               5000
 
-#ifdef FEATURE_OAD
-// The size of an OAD packet.
-#define OAD_PACKET_SIZE                       ((OAD_BLOCK_SIZE) + 2)
-#endif // FEATURE_OAD
-
 // Task configuration
 #define SBP_TASK_PRIORITY                     1
 
@@ -155,6 +138,10 @@
 #define SBP_CHAR_CHANGE_EVT                   0x0002
 #define SBP_PERIODIC_EVT                      0x0004
 #define SBP_CONN_EVT_END_EVT                  0x0008
+
+/** HID Related **/
+#define HID_DEV_IDLE_TIMEOUT  6000
+
 
 /*********************************************************************
  * TYPEDEFS
@@ -190,12 +177,6 @@ static Clock_Struct periodicClock;
 static Queue_Struct appMsg;
 static Queue_Handle appMsgQueue;
 
-#if defined(FEATURE_OAD)
-// Event data from OAD profile.
-static Queue_Struct oadQ;
-static Queue_Handle hOadQ;
-#endif //FEATURE_OAD
-
 // events flag for internal application events.
 static uint16_t events;
 
@@ -210,27 +191,15 @@ Char sbpTaskStack[SBP_TASK_STACK_SIZE];
 static uint8_t scanRspData[] =
 {
   // complete name
-  0x14,   // length of this data
+  0x8,   // length of this data
   GAP_ADTYPE_LOCAL_NAME_COMPLETE,
-  'S',
-  'i',
-  'm',
-  'p',
+  'C',
   'l',
-  'e',
-  'B',
-  'L',
-  'E',
-  'P',
+  'i',
+  'c',
+  'k',
   'e',
   'r',
-  'i',
-  'p',
-  'h',
-  'e',
-  'r',
-  'a',
-  'l',
 
   // connection interval range
   0x05,   // length of this data
@@ -246,6 +215,8 @@ static uint8_t scanRspData[] =
   0       // 0dBm
 };
 
+// TODO: Add appearance AD type here
+
 // GAP - Advertisement data (max size = 31 bytes, though this is
 // best kept short to conserve power while advertisting)
 static uint8_t advertData[] =
@@ -259,28 +230,31 @@ static uint8_t advertData[] =
 
   // service UUID, to notify central devices what services are included
   // in this peripheral
-#if !defined(FEATURE_OAD) || defined(FEATURE_OAD_ONCHIP)
   0x03,   // length of this data
-#else //OAD for external flash
-  0x05,  // lenght of this data
-#endif //FEATURE_OAD
   GAP_ADTYPE_16BIT_MORE,      // some of the UUID's, but not all
-#ifdef FEATURE_OAD
-  LO_UINT16(OAD_SERVICE_UUID),
-  HI_UINT16(OAD_SERVICE_UUID),
-#endif //FEATURE_OAD
-#ifndef FEATURE_OAD_ONCHIP
   LO_UINT16(SIMPLEPROFILE_SERV_UUID),
   HI_UINT16(SIMPLEPROFILE_SERV_UUID)
-#endif //FEATURE_OAD_ONCHIP
 };
 
+// TODO: Add HID Service UUID AD type
+
 // GAP GATT Attributes
-static uint8_t attDeviceName[GAP_DEVICE_NAME_LEN] = "Simple BLE Peripheral";
+static uint8_t attDeviceName[GAP_DEVICE_NAME_LEN] = "Clicker";
+// static uint16_t attDeviceAppearance = GAP_APPEARE_HID_KEYBOARD;
 
 // Globals used for ATT Response retransmission
 static gattMsgEvent_t *pAttRsp = NULL;
 static uint8_t rspTxRetry = 0;
+
+/** HID Dev Variables **/
+// HID dev configuration structure
+static hidDevCfg_t clicker_hidDevCfg =
+{
+  // uint32_t    idleTimeout;      // Idle timeout in milliseconds
+  HID_DEV_IDLE_TIMEOUT,
+  // uint8_t     hidFlags;         // HID feature flags
+  HID_KBD_FLAGS // Actually: RemoteWake. Defined in hidkbdservice
+};
 
 /*********************************************************************
  * LOCAL FUNCTIONS
@@ -301,16 +275,15 @@ static void SimpleBLEPeripheral_sendAttRsp(void);
 static void SimpleBLEPeripheral_freeAttRsp(uint8_t status);
 
 static void SimpleBLEPeripheral_stateChangeCB(gaprole_States_t newState);
-#ifndef FEATURE_OAD_ONCHIP
 static void SimpleBLEPeripheral_charValueChangeCB(uint8_t paramID);
-#endif //!FEATURE_OAD_ONCHIP
 static void SimpleBLEPeripheral_enqueueMsg(uint8_t event, uint8_t state);
 
-#ifdef FEATURE_OAD
-void SimpleBLEPeripheral_processOadWriteCB(uint8_t event, uint16_t connHandle,
-                                           uint8_t *pData);
-#endif //FEATURE_OAD
+/* HID Dev related functions */
+static uint8_t clicker_hidDevReportCB(uint8_t id, uint8_t type, uint16_t uuid, uint8_t oper, uint16_t *pLen, uint8_t *pData);
+static void clicker_hidDevEvtCB(uint8_t evt);
 
+/* Utils */
+static char *Util_getLocalNameStr(const uint8_t *data);
 
 /*********************************************************************
  * PROFILE CALLBACKS
@@ -330,19 +303,17 @@ static gapBondCBs_t simpleBLEPeripheral_BondMgrCBs =
 };
 
 // Simple GATT Profile Callbacks
-#ifndef FEATURE_OAD_ONCHIP
 static simpleProfileCBs_t SimpleBLEPeripheral_simpleProfileCBs =
 {
   SimpleBLEPeripheral_charValueChangeCB // Characteristic value change callback
 };
-#endif //!FEATURE_OAD_ONCHIP
 
-#ifdef FEATURE_OAD
-static oadTargetCBs_t simpleBLEPeripheral_oadCBs =
+static hidDevCB_t clicker_CBs =
 {
-  SimpleBLEPeripheral_processOadWriteCB // Write Callback.
+     clicker_hidDevReportCB, // HID Report Callback
+     clicker_hidDevEvtCB, // HID event callback
+     NULL // HID Passcode callback, nullable
 };
-#endif //FEATURE_OAD
 
 /*********************************************************************
  * PUBLIC FUNCTIONS
@@ -395,24 +366,6 @@ static void SimpleBLEPeripheral_init(void)
   RCOSC_enableCalibration();
 #endif // USE_RCOSC
 
-#if defined( USE_FPGA )
-  // configure RF Core SMI Data Link
-  IOCPortConfigureSet(IOID_12, IOC_PORT_RFC_GPO0, IOC_STD_OUTPUT);
-  IOCPortConfigureSet(IOID_11, IOC_PORT_RFC_GPI0, IOC_STD_INPUT);
-
-  // configure RF Core SMI Command Link
-  IOCPortConfigureSet(IOID_10, IOC_IOCFG0_PORT_ID_RFC_SMI_CL_OUT, IOC_STD_OUTPUT);
-  IOCPortConfigureSet(IOID_9, IOC_IOCFG0_PORT_ID_RFC_SMI_CL_IN, IOC_STD_INPUT);
-
-  // configure RF Core tracer IO
-  IOCPortConfigureSet(IOID_8, IOC_PORT_RFC_TRC, IOC_STD_OUTPUT);
-#else // !USE_FPGA
-  #if defined( DEBUG_SW_TRACE )
-    // configure RF Core tracer IO
-    IOCPortConfigureSet(IOID_8, IOC_PORT_RFC_TRC, IOC_STD_OUTPUT | IOC_CURRENT_4MA | IOC_SLEW_ENABLE);
-  #endif // DEBUG_SW_TRACE
-#endif // USE_FPGA
-
   // Create an RTOS queue for message from profile to be sent to app.
   appMsgQueue = Util_constructQueue(&appMsg);
 
@@ -420,7 +373,7 @@ static void SimpleBLEPeripheral_init(void)
   Util_constructClock(&periodicClock, SimpleBLEPeripheral_clockHandler,
                       SBP_PERIODIC_EVT_PERIOD, 0, false, SBP_PERIODIC_EVT);
 
-  dispHandle = Display_open(Display_Type_LCD, NULL);
+  dispHandle = Display_open(Display_Type_UART, NULL);
 
   // Setup the GAP
   GAP_SetParamValue(TGAP_CONN_PAUSE_PERIPHERAL, DEFAULT_CONN_PAUSE_PERIPHERAL);
@@ -451,6 +404,9 @@ static void SimpleBLEPeripheral_init(void)
                          scanRspData);
     GAPRole_SetParameter(GAPROLE_ADVERT_DATA, sizeof(advertData), advertData);
 
+    Log_info1("Name in advertData array: \x1b[33m%s\x1b[0m",
+                (IArg)Util_getLocalNameStr(advertData));
+
     GAPRole_SetParameter(GAPROLE_PARAM_UPDATE_ENABLE, sizeof(uint8_t),
                          &enableUpdateRequest);
     GAPRole_SetParameter(GAPROLE_MIN_CONN_INTERVAL, sizeof(uint16_t),
@@ -465,6 +421,7 @@ static void SimpleBLEPeripheral_init(void)
 
   // Set the GAP Characteristics
   GGS_SetParameter(GGS_DEVICE_NAME_ATT, GAP_DEVICE_NAME_LEN, attDeviceName);
+  // GGS_SetParameter(GGS_APPEARANCE_ATT, sizeof(uint16_t), &attDeviceAppearance);
 
   // Set advertising interval
   {
@@ -497,22 +454,9 @@ static void SimpleBLEPeripheral_init(void)
   GATTServApp_AddService(GATT_ALL_SERVICES);   // GATT attributes
   DevInfo_AddService();                        // Device Information Service
 
-#ifndef FEATURE_OAD_ONCHIP
+  /** Simple Profile **/
   SimpleProfile_AddService(GATT_ALL_SERVICES); // Simple GATT Profile
-#endif //!FEATURE_OAD_ONCHIP
 
-#ifdef FEATURE_OAD
-  VOID OAD_addService();                 // OAD Profile
-  OAD_register((oadTargetCBs_t *)&simpleBLEPeripheral_oadCBs);
-  hOadQ = Util_constructQueue(&oadQ);
-#endif //FEATURE_OAD
-
-#ifdef IMAGE_INVALIDATE
-  Reset_addService();
-#endif //IMAGE_INVALIDATE
-
-
-#ifndef FEATURE_OAD_ONCHIP
   // Setup the SimpleProfile Characteristic Values
   {
     uint8_t charValue1 = 1;
@@ -535,13 +479,24 @@ static void SimpleBLEPeripheral_init(void)
 
   // Register callback with SimpleGATTprofile
   SimpleProfile_RegisterAppCBs(&SimpleBLEPeripheral_simpleProfileCBs);
-#endif //!FEATURE_OAD_ONCHIP
+
+  /** HidDev **/
+  Log_info0("Registering Hid Device");
+  HidDev_Register(&clicker_hidDevCfg, &clicker_CBs);
+
+  /** Hid Keyboard **/
+  // HidKbd_AddService();
 
   // Start the Device
+  Log_info0("Device starting");
   VOID GAPRole_StartDevice(&SimpleBLEPeripheral_gapRoleCBs);
 
   // Start Bond Manager
+  Log_info0("Bond Manager starting");
   VOID GAPBondMgr_Register(&simpleBLEPeripheral_BondMgrCBs);
+
+  /** Hid Dev **/
+  // HidDev_StartDevice();
 
   // Register with GAP for HCI/Host messages
   GAP_RegisterForMsgs(selfEntity);
@@ -551,15 +506,7 @@ static void SimpleBLEPeripheral_init(void)
 
   HCI_LE_ReadMaxDataLenCmd();
 
-#if defined FEATURE_OAD
-#if defined (HAL_IMAGE_A)
-  Display_print0(dispHandle, 0, 0, "BLE Peripheral A");
-#else
-  Display_print0(dispHandle, 0, 0, "BLE Peripheral B");
-#endif // HAL_IMAGE_A
-#else
-  Display_print0(dispHandle, 0, 0, "BLE Peripheral");
-#endif // FEATURE_OAD
+  Log_info0("BLE Peripheral Init finished");
 }
 
 /*********************************************************************
@@ -573,6 +520,7 @@ static void SimpleBLEPeripheral_init(void)
  */
 static void SimpleBLEPeripheral_taskFxn(UArg a0, UArg a1)
 {
+  Log_info0("Starting taskFxn");
   // Initialize application
   SimpleBLEPeripheral_init();
 
@@ -646,29 +594,29 @@ static void SimpleBLEPeripheral_taskFxn(UArg a0, UArg a1)
       // Perform periodic application task
       SimpleBLEPeripheral_performPeriodicTask();
     }
-
-#ifdef FEATURE_OAD
-    while (!Queue_empty(hOadQ))
-    {
-      oadTargetWrite_t *oadWriteEvt = Queue_get(hOadQ);
-
-      // Identify new image.
-      if (oadWriteEvt->event == OAD_WRITE_IDENTIFY_REQ)
-      {
-        OAD_imgIdentifyWrite(oadWriteEvt->connHandle, oadWriteEvt->pData);
-      }
-      // Write a next block request.
-      else if (oadWriteEvt->event == OAD_WRITE_BLOCK_REQ)
-      {
-        OAD_imgBlockWrite(oadWriteEvt->connHandle, oadWriteEvt->pData);
-      }
-
-      // Free buffer.
-      ICall_free(oadWriteEvt);
-    }
-#endif //FEATURE_OAD
   }
 }
+
+/** HID Callbacks **/
+
+// HID Report callback
+// type: hidDevReportCB_t
+static uint8_t clicker_hidDevReportCB(uint8_t id, uint8_t type, uint16_t uuid,
+                                   uint8_t oper, uint16_t *pLen, uint8_t *pData) {
+    // TODO: does nothing
+    Log_info4("id: %d, type: %d, uuid: %d, oper: %d", id, type, uuid, oper);
+    return SUCCESS;
+}
+
+// HID event callback
+// type: hidDevEvtCB_t
+static void clicker_hidDevEvtCB(uint8_t evt) {
+    // TODO: does nothing
+    Log_info1("evt: %d", evt);
+    return;
+}
+
+
 
 /*********************************************************************
  * @fn      SimpleBLEPeripheral_processStackMsg
@@ -747,12 +695,12 @@ static uint8_t SimpleBLEPeripheral_processGATTMsg(gattMsgEvent_t *pMsg)
     // The app is informed in case it wants to drop the connection.
 
     // Display the opcode of the message that caused the violation.
-    Display_print1(dispHandle, 5, 0, "FC Violated: %d", pMsg->msg.flowCtrlEvt.opcode);
+    Log_info1("FC Violated: %d", pMsg->msg.flowCtrlEvt.opcode);
   }
   else if (pMsg->method == ATT_MTU_UPDATED_EVENT)
   {
     // MTU size updated
-    Display_print1(dispHandle, 5, 0, "MTU Size: $d", pMsg->msg.mtuEvt.MTU);
+    Log_info1("MTU Size: $d", pMsg->msg.mtuEvt.MTU);
   }
 
   // Free message payload. Needed only for ATT Protocol messages
@@ -795,7 +743,7 @@ static void SimpleBLEPeripheral_sendAttRsp(void)
     else
     {
       // Continue retrying
-      Display_print1(dispHandle, 5, 0, "Rsp send retry: %d", rspTxRetry);
+      Log_info1("Rsp send retry: %d", rspTxRetry);
     }
   }
 }
@@ -817,14 +765,14 @@ static void SimpleBLEPeripheral_freeAttRsp(uint8_t status)
     // See if the response was sent out successfully
     if (status == SUCCESS)
     {
-      Display_print1(dispHandle, 5, 0, "Rsp sent retry: %d", rspTxRetry);
+      Log_info1("Rsp sent retry: %d", rspTxRetry);
     }
     else
     {
       // Free response payload
       GATT_bm_free(&pAttRsp->msg, pAttRsp->method);
 
-      Display_print1(dispHandle, 5, 0, "Rsp retry failed: %d", rspTxRetry);
+      Log_info1("Rsp retry failed: %d", rspTxRetry);
     }
 
     // Free response message
@@ -919,13 +867,13 @@ static void SimpleBLEPeripheral_processStateChangeEvt(gaprole_States_t newState)
         DevInfo_SetParameter(DEVINFO_SYSTEM_ID, DEVINFO_SYSTEM_ID_LEN, systemId);
 
         // Display device address
-        Display_print0(dispHandle, 1, 0, Util_convertBdAddr2Str(ownAddress));
-        Display_print0(dispHandle, 2, 0, "Initialized");
+        Log_info0(Util_convertBdAddr2Str(ownAddress));
+        Log_info0("Initialized");
       }
       break;
 
     case GAPROLE_ADVERTISING:
-      Display_print0(dispHandle, 2, 0, "Advertising");
+      Log_info0("Advertising");
       break;
 
 #ifdef PLUS_BROADCASTER
@@ -969,8 +917,8 @@ static void SimpleBLEPeripheral_processStateChangeEvt(gaprole_States_t newState)
         // connection
         if ( linkDB_GetInfo( numActive - 1, &linkInfo ) == SUCCESS )
         {
-          Display_print1(dispHandle, 2, 0, "Num Conns: %d", (uint16_t)numActive);
-          Display_print0(dispHandle, 3, 0, Util_convertBdAddr2Str(linkInfo.addr));
+          Log_info1("Num Conns: %d", (uint16_t)numActive);
+          Log_info0(Util_convertBdAddr2Str(linkInfo.addr));
         }
         else
         {
@@ -978,8 +926,8 @@ static void SimpleBLEPeripheral_processStateChangeEvt(gaprole_States_t newState)
 
           GAPRole_GetParameter(GAPROLE_CONN_BD_ADDR, peerAddress);
 
-          Display_print0(dispHandle, 2, 0, "Connected");
-          Display_print0(dispHandle, 3, 0, Util_convertBdAddr2Str(peerAddress));
+          Log_info0("Connected");
+          Log_info0(Util_convertBdAddr2Str(peerAddress));
         }
 
         #ifdef PLUS_BROADCASTER
@@ -1007,14 +955,14 @@ static void SimpleBLEPeripheral_processStateChangeEvt(gaprole_States_t newState)
       break;
 
     case GAPROLE_CONNECTED_ADV:
-      Display_print0(dispHandle, 2, 0, "Connected Advertising");
+      Log_info0("Connected Advertising");
       break;
 
     case GAPROLE_WAITING:
       Util_stopClock(&periodicClock);
       SimpleBLEPeripheral_freeAttRsp(bleNotConnected);
 
-      Display_print0(dispHandle, 2, 0, "Disconnected");
+      Log_info0("Disconnected");
 
       // Clear remaining lines
       Display_clearLines(dispHandle, 3, 5);
@@ -1023,7 +971,7 @@ static void SimpleBLEPeripheral_processStateChangeEvt(gaprole_States_t newState)
     case GAPROLE_WAITING_AFTER_TIMEOUT:
       SimpleBLEPeripheral_freeAttRsp(bleNotConnected);
 
-      Display_print0(dispHandle, 2, 0, "Timed Out");
+      Log_info0("Timed Out");
 
       // Clear remaining lines
       Display_clearLines(dispHandle, 3, 5);
@@ -1035,7 +983,7 @@ static void SimpleBLEPeripheral_processStateChangeEvt(gaprole_States_t newState)
       break;
 
     case GAPROLE_ERROR:
-      Display_print0(dispHandle, 2, 0, "Error");
+      Log_info0("Error");
       break;
 
     default:
@@ -1047,7 +995,7 @@ static void SimpleBLEPeripheral_processStateChangeEvt(gaprole_States_t newState)
   //gapProfileState = newState;
 }
 
-#ifndef FEATURE_OAD_ONCHIP
+
 /*********************************************************************
  * @fn      SimpleBLEPeripheral_charValueChangeCB
  *
@@ -1062,7 +1010,6 @@ static void SimpleBLEPeripheral_charValueChangeCB(uint8_t paramID)
 {
   SimpleBLEPeripheral_enqueueMsg(SBP_CHAR_CHANGE_EVT, paramID);
 }
-#endif //!FEATURE_OAD_ONCHIP
 
 /*********************************************************************
  * @fn      SimpleBLEPeripheral_processCharValueChangeEvt
@@ -1076,7 +1023,6 @@ static void SimpleBLEPeripheral_charValueChangeCB(uint8_t paramID)
  */
 static void SimpleBLEPeripheral_processCharValueChangeEvt(uint8_t paramID)
 {
-#ifndef FEATURE_OAD_ONCHIP
   uint8_t newValue;
 
   switch(paramID)
@@ -1084,20 +1030,19 @@ static void SimpleBLEPeripheral_processCharValueChangeEvt(uint8_t paramID)
     case SIMPLEPROFILE_CHAR1:
       SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR1, &newValue);
 
-      Display_print1(dispHandle, 4, 0, "Char 1: %d", (uint16_t)newValue);
+      Log_info1("Char 1: %d", (uint16_t)newValue);
       break;
 
     case SIMPLEPROFILE_CHAR3:
       SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR3, &newValue);
 
-      Display_print1(dispHandle, 4, 0, "Char 3: %d", (uint16_t)newValue);
+      Log_info1("Char 3: %d", (uint16_t)newValue);
       break;
 
     default:
       // should not reach here!
       break;
   }
-#endif //!FEATURE_OAD_ONCHIP
 }
 
 /*********************************************************************
@@ -1115,7 +1060,6 @@ static void SimpleBLEPeripheral_processCharValueChangeEvt(uint8_t paramID)
  */
 static void SimpleBLEPeripheral_performPeriodicTask(void)
 {
-#ifndef FEATURE_OAD_ONCHIP
   uint8_t valueToCopy;
 
   // Call to retrieve the value of the third characteristic in the profile
@@ -1128,49 +1072,7 @@ static void SimpleBLEPeripheral_performPeriodicTask(void)
     SimpleProfile_SetParameter(SIMPLEPROFILE_CHAR4, sizeof(uint8_t),
                                &valueToCopy);
   }
-#endif //!FEATURE_OAD_ONCHIP
 }
-
-
-#ifdef FEATURE_OAD
-/*********************************************************************
- * @fn      SimpleBLEPeripheral_processOadWriteCB
- *
- * @brief   Process a write request to the OAD profile.
- *
- * @param   event      - event type:
- *                       OAD_WRITE_IDENTIFY_REQ
- *                       OAD_WRITE_BLOCK_REQ
- * @param   connHandle - the connection Handle this request is from.
- * @param   pData      - pointer to data for processing and/or storing.
- *
- * @return  None.
- */
-void SimpleBLEPeripheral_processOadWriteCB(uint8_t event, uint16_t connHandle,
-                                           uint8_t *pData)
-{
-  oadTargetWrite_t *oadWriteEvt = ICall_malloc( sizeof(oadTargetWrite_t) + \
-                                             sizeof(uint8_t) * OAD_PACKET_SIZE);
-
-  if ( oadWriteEvt != NULL )
-  {
-    oadWriteEvt->event = event;
-    oadWriteEvt->connHandle = connHandle;
-
-    oadWriteEvt->pData = (uint8_t *)(&oadWriteEvt->pData + 1);
-    memcpy(oadWriteEvt->pData, pData, OAD_PACKET_SIZE);
-
-    Queue_put(hOadQ, (Queue_Elem *)oadWriteEvt);
-
-    // Post the application's semaphore.
-    Semaphore_post(sem);
-  }
-  else
-  {
-    // Fail silently.
-  }
-}
-#endif //FEATURE_OAD
 
 /*********************************************************************
  * @fn      SimpleBLEPeripheral_clockHandler
@@ -1217,3 +1119,33 @@ static void SimpleBLEPeripheral_enqueueMsg(uint8_t event, uint8_t state)
 
 /*********************************************************************
 *********************************************************************/
+
+/*
+ * @brief   Extract the LOCALNAME from Scan/AdvData
+ *
+ * @param   data - Pointer to the advertisement or scan response data
+ *
+ * @return  Pointer to null-terminated string with the adv local name.
+ */
+static char *Util_getLocalNameStr(const uint8_t *data) {
+  uint8_t nuggetLen = 0;
+  uint8_t nuggetType = 0;
+  uint8_t advIdx = 0;
+
+  static char localNameStr[32] = { 0 };
+  memset(localNameStr, 0, sizeof(localNameStr));
+
+  for (advIdx = 0; advIdx < 32;) {
+    nuggetLen = data[advIdx++];
+    nuggetType = data[advIdx];
+    if ( (nuggetType == GAP_ADTYPE_LOCAL_NAME_COMPLETE ||
+          nuggetType == GAP_ADTYPE_LOCAL_NAME_SHORT) && nuggetLen < 31) {
+      memcpy(localNameStr, &data[advIdx + 1], nuggetLen - 1);
+      break;
+    } else {
+      advIdx += nuggetLen;
+    }
+  }
+
+  return localNameStr;
+}
