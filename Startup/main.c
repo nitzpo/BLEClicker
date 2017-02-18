@@ -58,7 +58,9 @@
 #include "hal_assert.h"
 #include "bcomdef.h"
 #include "peripheral.h"
-#include "project_zero.h"
+//#include "project_zero.h"
+#include "simple_peripheral.h"
+#include "hiddev.h"
 
 #include <ti/drivers/UART.h>
 #include <uart_logs.h>
@@ -146,10 +148,14 @@ int main()
   /* Start tasks of external images - Priority 5 */
   ICall_createRemoteTasks();
 
+  /* Start HidDev task */
+  // HidDev_createTask();
+
   /* Kick off profile - Priority 3 */
   GAPRole_createTask();
 
-  ProjectZero_createTask();
+  // ProjectZero_createTask();
+  SimpleBLEPeripheral_createTask();
 
   /* enable interrupts and start SYS/BIOS */
   BIOS_start();
