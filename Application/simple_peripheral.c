@@ -133,7 +133,10 @@
 #define SBP_CONN_EVT_END_EVT                  0x0008
 
 /** HID Related **/
-#define HID_DEV_IDLE_TIMEOUT  6000
+// timeout in miliseconds. 0 disables timeout
+//#define HID_DEV_IDLE_TIMEOUT  60000
+#define HID_DEV_IDLE_TIMEOUT  0
+// TODO: Change timeout to something reasonable
 
 
 /*********************************************************************
