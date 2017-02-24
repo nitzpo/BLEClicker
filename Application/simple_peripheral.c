@@ -395,9 +395,9 @@ static void SimpleBLEPeripheral_init(void)
   // Setup the GAP Bond Manager
   {
     uint32_t passkey = 0; // passkey "000000"
-    uint8_t pairMode = GAPBOND_PAIRING_MODE_WAIT_FOR_REQ;
-    uint8_t mitm = TRUE;
-    uint8_t ioCap = GAPBOND_IO_CAP_DISPLAY_ONLY;
+    uint8_t pairMode = GAPBOND_PAIRING_MODE_INITIATE; // GAPBondMgr will send a pairing request after connection
+    uint8_t mitm = FALSE; // Do not use authenticated pairing
+    uint8_t ioCap = GAPBOND_IO_CAP_NO_INPUT_NO_OUTPUT; // device is not capable for interactive authentication.
     uint8_t bonding = TRUE;
 
     GAPBondMgr_SetParameter(GAPBOND_DEFAULT_PASSCODE, sizeof(uint32_t),
@@ -525,8 +525,10 @@ static uint8_t clicker_hidDevReportCB(uint8_t id, uint8_t type, uint16_t uuid,
 // HID event callback
 // type: hidDevEvtCB_t
 static void clicker_hidDevEvtCB(uint8_t evt) {
-    // TODO: does nothing
-    Log_info1("evt: %d", evt);
+    Log_info1("clicker hidDevEvtCB evt: %d", evt);
+    if (HID_DEV_GAPROLE_STATE_CHANGE_EVT == evt) {
+        Log_info0("HID device state change evt!");
+    }
     return;
 }
 
