@@ -54,6 +54,7 @@
 
 #include <xdc/runtime/Error.h>
 #include <xdc/runtime/System.h>
+#include <xdc/runtime/Log.h>
 
 #include <ti/sysbios/BIOS.h>
 #include <ti/sysbios/knl/Task.h>
@@ -127,7 +128,8 @@
 #define HIDDEVICE_TASK_PRIORITY               2
 
 #ifndef HIDDEVICE_TASK_STACK_SIZE
-#define HIDDEVICE_TASK_STACK_SIZE             400
+//#define HIDDEVICE_TASK_STACK_SIZE             400
+#define HIDDEVICE_TASK_STACK_SIZE             900
 #endif
 
 /*********************************************************************
@@ -427,8 +429,12 @@ static void HidDev_init(void)
  */
 static void HidDev_taskFxn(UArg a0, UArg a1)
 {
+  Log_info0("HIDDEV: Starting HidDev_taskFxn");
+
   // Initialize the application.
+  Log_info0("HIDDEV: HidDev_init()");
   HidDev_init();
+  Log_info0("HIDDEV: Finished HidDev_init()");
 
   // Application main loop.
   for (;;)
@@ -548,6 +554,7 @@ static void HidDev_taskFxn(UArg a0, UArg a1)
  */
 void HidDev_StartDevice(void)
 {
+  Log_info0("HIDDEV: HidDev_StartDevice() calling");
   // Start the Device.
   VOID GAPRole_StartDevice(&hidDev_PeripheralCBs);
 
@@ -608,6 +615,8 @@ void HidDev_RegisterReports(uint8_t numReports, hidRptMap_t *pRpt)
  */
 void HidDev_Report(uint8_t id, uint8_t type, uint8_t len, uint8_t *pData)
 {
+    Log_info3("HIDDEV: HidDev_Report() calling, id: %d, type: %d, len: %d", id, type, len);
+
   // Validate length of report
   if ( len > HID_DEV_DATA_LEN )
   {
@@ -651,6 +660,7 @@ void HidDev_Report(uint8_t id, uint8_t type, uint8_t len, uint8_t *pData)
  */
 void HidDev_Close(void)
 {
+  Log_info0("HIDDEV: HidDev_Close() calling");
   uint8_t param;
 
   // If connected then disconnect.
@@ -1037,6 +1047,7 @@ void HidDev_StopIdleTimer(void)
  */
 void HidDev_StartAdvertising(void)
 {
+    Log_info0("HIDDEV: HidDev_StartAdvertising() calling");
   // If previously bonded
   if (HidDev_bondCount() > 0)
   {
@@ -1182,6 +1193,7 @@ static void HidDev_processStateChangeEvt(gaprole_States_t newState)
       // Post the profile's semaphore.
       Semaphore_post(sem);
     }
+    Log_info0("HIDDEV: Connected");
   }
   // If disconnected
   else if (hidDevGapState == GAPROLE_CONNECTED &&
@@ -1206,10 +1218,12 @@ static void HidDev_processStateChangeEvt(gaprole_States_t newState)
       GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(uint8_t), &advState);
     }
 #endif //AUTO_ADV
+    Log_info0("HIDDEV: Connection stopped");
   }
   // If started
   else if (newState == GAPROLE_STARTED)
   {
+      Log_info0("HIDDEV: GAPROLE_STARTED Initialized");
     // Nothing to do for now!
   }
 
