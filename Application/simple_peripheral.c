@@ -58,10 +58,6 @@
 #include "hci_tl.h"
 #include "gatt.h"
 #include "linkdb.h"
-#include "gapgattserver.h"
-#include "gattservapp.h"
-#include "devinfoservice.h"
-#include "simple_gatt_profile.h"
 
 // HOGP
 #include "hiddev.h"
@@ -71,6 +67,7 @@
 #include "gapbondmgr.h"
 
 #include "osal_snv.h"
+#include "gattservapp.h"
 #include "icall_apimsg.h"
 
 #include "util.h"
@@ -121,9 +118,6 @@
 // Connection Pause Peripheral time value (in seconds)
 #define DEFAULT_CONN_PAUSE_PERIPHERAL         6
 
-// How often to perform periodic event (in msec)
-#define SBP_PERIODIC_EVT_PERIOD               5000
-
 // Task configuration
 #define SBP_TASK_PRIORITY                     1
 
@@ -134,7 +128,7 @@
 
 // Internal Events for RTOS application
 #define SBP_STATE_CHANGE_EVT                  0x0001
-#define SBP_CHAR_CHANGE_EVT                   0x0002
+//#define SBP_CHAR_CHANGE_EVT                   0x0002
 #define SBP_PERIODIC_EVT                      0x0004
 #define SBP_CONN_EVT_END_EVT                  0x0008
 
@@ -227,10 +221,10 @@ static uint8_t advertData[] =
 
   // service UUID, to notify central devices what services are included
   // in this peripheral
-  0x03,   // length of this data
-  GAP_ADTYPE_16BIT_MORE,      // some of the UUID's, but not all
-  LO_UINT16(SIMPLEPROFILE_SERV_UUID),
-  HI_UINT16(SIMPLEPROFILE_SERV_UUID)
+//  0x03,   // length of this data
+//  GAP_ADTYPE_16BIT_MORE,      // some of the UUID's, but not all
+//  LO_UINT16(SIMPLEPROFILE_SERV_UUID),
+//  HI_UINT16(SIMPLEPROFILE_SERV_UUID)
 };
 
 // TODO: Add HID Service UUID AD type
@@ -263,16 +257,11 @@ static void SimpleBLEPeripheral_taskFxn(UArg a0, UArg a1);
 static uint8_t SimpleBLEPeripheral_processStackMsg(ICall_Hdr *pMsg);
 static uint8_t SimpleBLEPeripheral_processGATTMsg(gattMsgEvent_t *pMsg);
 static void SimpleBLEPeripheral_processAppMsg(sbpEvt_t *pMsg);
-static void SimpleBLEPeripheral_processStateChangeEvt(gaprole_States_t newState);
-static void SimpleBLEPeripheral_processCharValueChangeEvt(uint8_t paramID);
-static void SimpleBLEPeripheral_performPeriodicTask(void);
-static void SimpleBLEPeripheral_clockHandler(UArg arg);
+static void SimpleBLEPeripheral_clickHandler(UArg arg);
 
 static void SimpleBLEPeripheral_sendAttRsp(void);
 static void SimpleBLEPeripheral_freeAttRsp(uint8_t status);
 
-static void SimpleBLEPeripheral_stateChangeCB(gaprole_States_t newState);
-static void SimpleBLEPeripheral_charValueChangeCB(uint8_t paramID);
 static void SimpleBLEPeripheral_enqueueMsg(uint8_t event, uint8_t state);
 
 /* HID Dev related functions */
@@ -285,25 +274,6 @@ static char *Util_getLocalNameStr(const uint8_t *data);
 /*********************************************************************
  * PROFILE CALLBACKS
  */
-
-// GAP Role Callbacks
-static gapRolesCBs_t SimpleBLEPeripheral_gapRoleCBs =
-{
-  SimpleBLEPeripheral_stateChangeCB     // Profile State Change Callbacks
-};
-
-// GAP Bond Manager Callbacks
-static gapBondCBs_t simpleBLEPeripheral_BondMgrCBs =
-{
-  NULL, // Passcode callback (not used by application)
-  NULL  // Pairing / Bonding state Callback (not used by application)
-};
-
-// Simple GATT Profile Callbacks
-static simpleProfileCBs_t SimpleBLEPeripheral_simpleProfileCBs =
-{
-  SimpleBLEPeripheral_charValueChangeCB // Characteristic value change callback
-};
 
 static hidDevCB_t clicker_CBs =
 {
@@ -365,10 +335,6 @@ static void SimpleBLEPeripheral_init(void)
 
   // Create an RTOS queue for message from profile to be sent to app.
   appMsgQueue = Util_constructQueue(&appMsg);
-
-  // Create one-shot clocks for internal periodic events.
-  Util_constructClock(&periodicClock, SimpleBLEPeripheral_clockHandler,
-                      SBP_PERIODIC_EVT_PERIOD, 0, false, SBP_PERIODIC_EVT);
 
   // Setup the GAP
   GAP_SetParamValue(TGAP_CONN_PAUSE_PERIPHERAL, DEFAULT_CONN_PAUSE_PERIPHERAL);
@@ -442,62 +408,16 @@ static void SimpleBLEPeripheral_init(void)
     GAPBondMgr_SetParameter(GAPBOND_BONDING_ENABLED, sizeof(uint8_t), &bonding);
   }
 
-   // Initialize GATT attributes
-  GGS_AddService(GATT_ALL_SERVICES);           // GAP
-  GATTServApp_AddService(GATT_ALL_SERVICES);   // GATT attributes
-  DevInfo_AddService();                        // Device Information Service
-
-  /** Simple Profile **/
-  SimpleProfile_AddService(GATT_ALL_SERVICES); // Simple GATT Profile
-
-  // Setup the SimpleProfile Characteristic Values
-  {
-    uint8_t charValue1 = 1;
-    uint8_t charValue2 = 2;
-    uint8_t charValue3 = 3;
-    uint8_t charValue4 = 4;
-    uint8_t charValue5[SIMPLEPROFILE_CHAR5_LEN] = { 1, 2, 3, 4, 5 };
-
-    SimpleProfile_SetParameter(SIMPLEPROFILE_CHAR1, sizeof(uint8_t),
-                               &charValue1);
-    SimpleProfile_SetParameter(SIMPLEPROFILE_CHAR2, sizeof(uint8_t),
-                               &charValue2);
-    SimpleProfile_SetParameter(SIMPLEPROFILE_CHAR3, sizeof(uint8_t),
-                               &charValue3);
-    SimpleProfile_SetParameter(SIMPLEPROFILE_CHAR4, sizeof(uint8_t),
-                               &charValue4);
-    SimpleProfile_SetParameter(SIMPLEPROFILE_CHAR5, SIMPLEPROFILE_CHAR5_LEN,
-                               charValue5);
-  }
-
-  // Register callback with SimpleGATTprofile
-  SimpleProfile_RegisterAppCBs(&SimpleBLEPeripheral_simpleProfileCBs);
-
   /** HidDev **/
   Log_info0("Registering Hid Device");
-  // HidDev_Register(&clicker_hidDevCfg, &clicker_CBs);
+  HidDev_Register(&clicker_hidDevCfg, &clicker_CBs);
 
   /** Hid Keyboard **/
-  // HidKbd_AddService();
-
-  // Start the Device
-  Log_info0("Device starting");
-  VOID GAPRole_StartDevice(&SimpleBLEPeripheral_gapRoleCBs);
-
-  // Start Bond Manager
-  Log_info0("Bond Manager starting");
-  VOID GAPBondMgr_Register(&simpleBLEPeripheral_BondMgrCBs);
+  HidKbd_AddService();
 
   /** Hid Dev **/
-  // HidDev_StartDevice();
-
-  // Register with GAP for HCI/Host messages
-  GAP_RegisterForMsgs(selfEntity);
-
-  // Register for GATT local events and ATT Responses pending for transmission
-  GATT_RegisterForMsgs(selfEntity);
-
-  HCI_LE_ReadMaxDataLenCmd();
+  Log_info0("Starting HID Device");
+  HidDev_StartDevice();
 
   Log_info0("BLE Peripheral Init finished");
 }
@@ -580,15 +500,14 @@ static void SimpleBLEPeripheral_taskFxn(UArg a0, UArg a1)
       }
     }
 
+    /*
     if (events & SBP_PERIODIC_EVT)
     {
       events &= ~SBP_PERIODIC_EVT;
 
-      Util_startClock(&periodicClock);
-
-      // Perform periodic application task
-      SimpleBLEPeripheral_performPeriodicTask();
+      // TODO: This is left here as an example on how to handle application events.
     }
+    */
   }
 }
 
@@ -665,11 +584,13 @@ static uint8_t SimpleBLEPeripheral_processStackMsg(ICall_Hdr *pMsg)
  */
 static uint8_t SimpleBLEPeripheral_processGATTMsg(gattMsgEvent_t *pMsg)
 {
+  Log_info0("SimpleBLEPeripheral_processGATTMsg() was called.");
   // See if GATT server was unable to transmit an ATT response
   if (pMsg->hdr.status == blePending)
   {
     // No HCI buffer was available. Let's try to retransmit the response
     // on the next connection event.
+    Log_info0("Something interesting happened in SimpleBLEPeripheral_processGATTMsg()");
     if (HCI_EXT_ConnEventNoticeCmd(pMsg->connHandle, selfEntity,
                                    SBP_CONN_EVT_END_EVT) == SUCCESS)
     {
@@ -716,6 +637,7 @@ static uint8_t SimpleBLEPeripheral_processGATTMsg(gattMsgEvent_t *pMsg)
  */
 static void SimpleBLEPeripheral_sendAttRsp(void)
 {
+  Log_info0("SimpleBLEPeripheral_sendAttRsp was called. This is interesting.");
   // See if there's a pending ATT Response to be transmitted
   if (pAttRsp != NULL)
   {
@@ -754,6 +676,7 @@ static void SimpleBLEPeripheral_sendAttRsp(void)
  */
 static void SimpleBLEPeripheral_freeAttRsp(uint8_t status)
 {
+  Log_info0("SimpleBLEPeripheral_freeAttRsp was called. This is interesting.");
   // See if there's a pending ATT response message
   if (pAttRsp != NULL)
   {
@@ -792,15 +715,6 @@ static void SimpleBLEPeripheral_processAppMsg(sbpEvt_t *pMsg)
 {
   switch (pMsg->hdr.event)
   {
-    case SBP_STATE_CHANGE_EVT:
-      SimpleBLEPeripheral_processStateChangeEvt((gaprole_States_t)pMsg->
-                                                hdr.state);
-      break;
-
-    case SBP_CHAR_CHANGE_EVT:
-      SimpleBLEPeripheral_processCharValueChangeEvt(pMsg->hdr.state);
-      break;
-
     default:
       // Do nothing.
       break;
@@ -808,272 +722,15 @@ static void SimpleBLEPeripheral_processAppMsg(sbpEvt_t *pMsg)
 }
 
 /*********************************************************************
- * @fn      SimpleBLEPeripheral_stateChangeCB
+ * @fn      SimpleBLEPeripheral_clickHandler
  *
- * @brief   Callback from GAP Role indicating a role state change.
- *
- * @param   newState - new state
- *
- * @return  None.
- */
-static void SimpleBLEPeripheral_stateChangeCB(gaprole_States_t newState)
-{
-  Log_info1("(CB) GAP State change: %d, Sending msg to app.", (IArg)newState);
-  SimpleBLEPeripheral_enqueueMsg(SBP_STATE_CHANGE_EVT, newState);
-}
-
-/*********************************************************************
- * @fn      SimpleBLEPeripheral_processStateChangeEvt
- *
- * @brief   Process a pending GAP Role state change event.
- *
- * @param   newState - new state
- *
- * @return  None.
- */
-static void SimpleBLEPeripheral_processStateChangeEvt(gaprole_States_t newState)
-{
-#ifdef PLUS_BROADCASTER
-  static bool firstConnFlag = false;
-#endif // PLUS_BROADCASTER
-
-  switch ( newState )
-  {
-    case GAPROLE_STARTED:
-      {
-        uint8_t ownAddress[B_ADDR_LEN];
-        uint8_t systemId[DEVINFO_SYSTEM_ID_LEN];
-
-        GAPRole_GetParameter(GAPROLE_BD_ADDR, ownAddress);
-
-        // use 6 bytes of device address for 8 bytes of system ID value
-        systemId[0] = ownAddress[0];
-        systemId[1] = ownAddress[1];
-        systemId[2] = ownAddress[2];
-
-        // set middle bytes to zero
-        systemId[4] = 0x00;
-        systemId[3] = 0x00;
-
-        // shift three bytes up
-        systemId[7] = ownAddress[5];
-        systemId[6] = ownAddress[4];
-        systemId[5] = ownAddress[3];
-
-        DevInfo_SetParameter(DEVINFO_SYSTEM_ID, DEVINFO_SYSTEM_ID_LEN, systemId);
-
-        // Display device address
-        Log_info0(Util_convertBdAddr2Str(ownAddress));
-        Log_info0("Initialized");
-      }
-      break;
-
-    case GAPROLE_ADVERTISING:
-      Log_info0("Advertising");
-      break;
-
-#ifdef PLUS_BROADCASTER
-    /* After a connection is dropped a device in PLUS_BROADCASTER will continue
-     * sending non-connectable advertisements and shall sending this change of
-     * state to the application.  These are then disabled here so that sending
-     * connectable advertisements can resume.
-     */
-    case GAPROLE_ADVERTISING_NONCONN:
-      {
-        uint8_t advertEnabled = FALSE;
-
-        // Disable non-connectable advertising.
-        GAPRole_SetParameter(GAPROLE_ADV_NONCONN_ENABLED, sizeof(uint8_t),
-                           &advertEnabled);
-
-        advertEnabled = TRUE;
-
-        // Enabled connectable advertising.
-        GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(uint8_t),
-                             &advertEnabled);
-
-        // Reset flag for next connection.
-        firstConnFlag = false;
-
-        SimpleBLEPeripheral_freeAttRsp(bleNotConnected);
-      }
-      break;
-#endif //PLUS_BROADCASTER
-
-    case GAPROLE_CONNECTED:
-      {
-        linkDBInfo_t linkInfo;
-        uint8_t numActive = 0;
-
-        Util_startClock(&periodicClock);
-
-        numActive = linkDB_NumActive();
-
-        // Use numActive to determine the connection handle of the last
-        // connection
-        if ( linkDB_GetInfo( numActive - 1, &linkInfo ) == SUCCESS )
-        {
-          Log_info1("Num Conns: %d", (uint16_t)numActive);
-          Log_info0(Util_convertBdAddr2Str(linkInfo.addr));
-        }
-        else
-        {
-          uint8_t peerAddress[B_ADDR_LEN];
-
-          GAPRole_GetParameter(GAPROLE_CONN_BD_ADDR, peerAddress);
-
-          Log_info0("Connected");
-          Log_info0(Util_convertBdAddr2Str(peerAddress));
-        }
-
-        #ifdef PLUS_BROADCASTER
-          // Only turn advertising on for this state when we first connect
-          // otherwise, when we go from connected_advertising back to this state
-          // we will be turning advertising back on.
-          if (firstConnFlag == false)
-          {
-            uint8_t advertEnabled = FALSE; // Turn on Advertising
-
-            // Disable connectable advertising.
-            GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(uint8_t),
-                                 &advertEnabled);
-
-            // Set to true for non-connectabel advertising.
-            advertEnabled = TRUE;
-
-            // Enable non-connectable advertising.
-            GAPRole_SetParameter(GAPROLE_ADV_NONCONN_ENABLED, sizeof(uint8_t),
-                                 &advertEnabled);
-            firstConnFlag = true;
-          }
-        #endif // PLUS_BROADCASTER
-      }
-      break;
-
-    case GAPROLE_CONNECTED_ADV:
-      Log_info0("Connected Advertising");
-      break;
-
-    case GAPROLE_WAITING:
-      Util_stopClock(&periodicClock);
-      SimpleBLEPeripheral_freeAttRsp(bleNotConnected);
-
-      Log_info0("Disconnected");
-      break;
-
-    case GAPROLE_WAITING_AFTER_TIMEOUT:
-      SimpleBLEPeripheral_freeAttRsp(bleNotConnected);
-
-      Log_info0("Timed Out");
-
-      #ifdef PLUS_BROADCASTER
-        // Reset flag for next connection.
-        firstConnFlag = false;
-      #endif //#ifdef (PLUS_BROADCASTER)
-      break;
-
-    case GAPROLE_ERROR:
-      Log_info0("Error");
-      break;
-
-    default:
-      break;
-  }
-
-  // Update the state
-  //gapProfileState = newState;
-}
-
-
-/*********************************************************************
- * @fn      SimpleBLEPeripheral_charValueChangeCB
- *
- * @brief   Callback from Simple Profile indicating a characteristic
- *          value change.
- *
- * @param   paramID - parameter ID of the value that was changed.
- *
- * @return  None.
- */
-static void SimpleBLEPeripheral_charValueChangeCB(uint8_t paramID)
-{
-    // Log_info1("Char value change CB called, paramID: %d", paramID);
-    SimpleBLEPeripheral_enqueueMsg(SBP_CHAR_CHANGE_EVT, paramID);
-}
-
-/*********************************************************************
- * @fn      SimpleBLEPeripheral_processCharValueChangeEvt
- *
- * @brief   Process a pending Simple Profile characteristic value change
- *          event.
- *
- * @param   paramID - parameter ID of the value that was changed.
- *
- * @return  None.
- */
-static void SimpleBLEPeripheral_processCharValueChangeEvt(uint8_t paramID)
-{
-  uint8_t newValue;
-
-  switch(paramID)
-  {
-    case SIMPLEPROFILE_CHAR1:
-      SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR1, &newValue);
-
-      Log_info1("Char 1: %d", (uint16_t)newValue);
-      break;
-
-    case SIMPLEPROFILE_CHAR3:
-      SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR3, &newValue);
-
-      Log_info1("Char 3: %d", (uint16_t)newValue);
-      break;
-
-    default:
-      // should not reach here!
-      break;
-  }
-}
-
-/*********************************************************************
- * @fn      SimpleBLEPeripheral_performPeriodicTask
- *
- * @brief   Perform a periodic application task. This function gets called
- *          every five seconds (SBP_PERIODIC_EVT_PERIOD). In this example,
- *          the value of the third characteristic in the SimpleGATTProfile
- *          service is retrieved from the profile, and then copied into the
- *          value of the the fourth characteristic.
- *
- * @param   None.
- *
- * @return  None.
- */
-static void SimpleBLEPeripheral_performPeriodicTask(void)
-{
-  uint8_t valueToCopy;
-
-  // Call to retrieve the value of the third characteristic in the profile
-  if (SimpleProfile_GetParameter(SIMPLEPROFILE_CHAR3, &valueToCopy) == SUCCESS)
-  {
-    // Call to set that value of the fourth characteristic in the profile.
-    // Note that if notifications of the fourth characteristic have been
-    // enabled by a GATT client device, then a notification will be sent
-    // every time this function is called.
-    SimpleProfile_SetParameter(SIMPLEPROFILE_CHAR4, sizeof(uint8_t),
-                               &valueToCopy);
-  }
-}
-
-/*********************************************************************
- * @fn      SimpleBLEPeripheral_clockHandler
- *
- * @brief   Handler function for clock timeouts.
+ * @brief   Handler function for click events
  *
  * @param   arg - event type
  *
  * @return  None.
  */
-static void SimpleBLEPeripheral_clockHandler(UArg arg)
+static void SimpleBLEPeripheral_clickHandler(UArg arg)
 {
   // Store the event.
   events |= arg;
