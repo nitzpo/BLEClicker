@@ -146,11 +146,11 @@ int main()
   /* Start tasks of external images - Priority 5 */
   ICall_createRemoteTasks();
 
-  /* Start HidDev task */
-  // HidDev_createTask();
-
   /* Kick off profile - Priority 3 */
   GAPRole_createTask();
+
+  /* Start HidDev task */
+  HidDev_createTask();
 
   // ProjectZero_createTask();
   SimpleBLEPeripheral_createTask();
