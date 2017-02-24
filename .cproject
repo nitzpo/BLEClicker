@@ -86,8 +86,8 @@
 									<listOptionValue builtIn="false" value="Display_DISABLE_ALL"/>
 									<listOptionValue builtIn="false" value="BOARD_DISPLAY_EXCLUDE_UART"/>
 									<listOptionValue builtIn="false" value="BOARD_DISPLAY_EXCLUDE_LCD"/>
-									<listOptionValue builtIn="false" value="ICALL_MAX_NUM_TASKS=5"/>
-									<listOptionValue builtIn="false" value="ICALL_MAX_NUM_ENTITIES=6"/>
+									<listOptionValue builtIn="false" value="ICALL_MAX_NUM_TASKS=4"/>
+									<listOptionValue builtIn="false" value="ICALL_MAX_NUM_ENTITIES=8"/>
 									<listOptionValue builtIn="false" value="xdc_runtime_Assert_DISABLE_ALL"/>
 									<listOptionValue builtIn="false" value="Xxdc_runtime_Log_DISABLE_ALL"/>
 									<listOptionValue builtIn="false" value="MAX_NUM_BLE_CONNS=1"/>
@@ -100,7 +100,7 @@
 									<listOptionValue builtIn="false" value="&quot;${WORKSPACE_LOC}/project_zero_stack_cc2650/TOOLS/build_config.opt&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${WORKSPACE_LOC}/project_zero_stack_cc2650/TOOLS/ccs_compiler_defines.bcfg&quot;"/>
 								</option>
-								<option id="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.OPT_LEVEL.1089181623" name="Optimization level (--opt_level, -O)" superClass="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.OPT_LEVEL" useByScannerDiscovery="false" value="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.OPT_LEVEL.4" valueType="enumerated"/>
+								<option id="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.OPT_LEVEL.1089181623" name="Optimization level (--opt_level, -O)" superClass="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.OPT_LEVEL" useByScannerDiscovery="false" value="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.OPT_LEVEL.1" valueType="enumerated"/>
 								<option id="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.OPT_FOR_SPEED.44127951" name="Speed vs. size trade-offs (--opt_for_speed, -mf)" superClass="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.OPT_FOR_SPEED" useByScannerDiscovery="false" value="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.OPT_FOR_SPEED.0" valueType="enumerated"/>
 								<option id="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.C_DIALECT.1148977770" name="C Dialect" superClass="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.C_DIALECT" useByScannerDiscovery="false" value="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.C_DIALECT.C99" valueType="enumerated"/>
 								<option id="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.GCC.1085845824" name="Enable support for GCC extensions (DEPRECATED) (--gcc)" superClass="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.GCC" useByScannerDiscovery="false" value="true" valueType="boolean"/>
