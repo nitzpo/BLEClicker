@@ -150,6 +150,19 @@ typedef struct
   appEvtHdr_t hdr;  // event header.
 } sbpEvt_t;
 
+typedef struct
+{
+    // According to USB_HID1_11, Appendix B, section 1.
+    uint8_t modifierKeys; // aka ctrl, alt, etc.
+    uint8_t reserved; // constant OEM used value. Recommended 0.
+    uint8_t keyCode1;
+    uint8_t keyCode2;
+    uint8_t keyCode3;
+    uint8_t keyCode4;
+    uint8_t keyCode5;
+    uint8_t keyCode6;
+} keyboardInputReport_t;
+
 /*********************************************************************
  * GLOBAL VARIABLES
  */
@@ -750,10 +763,27 @@ static void SimpleBLEPeripheral_processAppMsg(sbpEvt_t *pMsg)
 
 
 static void clicker_processClkEvt(uint8_t keysPressed) {
-    if (keysPressed & KEY_NEXT) {
-        Log_info0("Clicked next");
-    } else if (keysPressed & KEY_PREV) {
-        Log_info0("Clicked previous");
+    // TODO: Add "asserts" that the connection is open etc.
+    keyboardInputReport_t reportData = { 0 };
+    if (keysPressed & (KEY_NEXT | KEY_PREV)) {
+        if (keysPressed & KEY_NEXT) {
+            Log_info0("Clicked next");
+            reportData.keyCode1 = HID_KEYBOARD_SPACEBAR;
+        } else if (keysPressed & KEY_PREV) {
+            Log_info0("Clicked previous");
+            reportData.keyCode1 = HID_KEYBOARD_DELETE; // backspace. del is del_fwd
+        }
+        HidDev_Report(HID_RPT_ID_KEY_IN,
+                      HID_REPORT_TYPE_INPUT,
+                      sizeof(reportData),
+                      (uint8_t*)&reportData);
+
+        // Release the key
+        reportData.keyCode1 = HID_KEYBOARD_RESERVED;
+        HidDev_Report(HID_RPT_ID_KEY_IN,
+                      HID_REPORT_TYPE_INPUT,
+                      sizeof(reportData),
+                      (uint8_t*)&reportData);
     } else {
         Log_warning1("Wierd value for clicker_buttonPressedCB. keysPressed: %d", keysPressed);
     }
