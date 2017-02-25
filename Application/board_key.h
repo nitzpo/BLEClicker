@@ -1,16 +1,16 @@
 /******************************************************************************
 
- @file  simple_peripheral.h
+ @file  board_key.h
 
- @brief This file contains the Simple BLE Peripheral sample application
-        definitions and prototypes.
+ @brief This file contains the SRF06EB Key Service definitions and prototypes
+        prototypes.
 
  Group: WCS, BTS
  Target Device: CC2650, CC2640, CC1350
 
  ******************************************************************************
  
- Copyright (c) 2013-2016, Texas Instruments Incorporated
+ Copyright (c) 2014-2016, Texas Instruments Incorporated
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -45,12 +45,11 @@
  Release Date: 2016-10-26 15:20:04
  *****************************************************************************/
 
-#ifndef SIMPLEBLEPERIPHERAL_H
-#define SIMPLEBLEPERIPHERAL_H
+#ifndef BOARD_KEY_H
+#define BOARD_KEY_H
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
 /*********************************************************************
@@ -64,30 +63,44 @@ extern "C"
 /*********************************************************************
  * CONSTANTS
  */
+#define KEY_SELECT            0x0001
+#define KEY_UP                0x0002
+#define KEY_DOWN              0x0004
+#define KEY_LEFT              0x0008
+#define KEY_RIGHT             0x0010
+   
+// Debounce timeout in milliseconds
+#define KEY_DEBOUNCE_TIMEOUT  200
 
-// Copied from KEY_LEFT and KEY_RIGHT in board_key.h
-#define KEY_NEXT    0x0010
-#define KEY_PREV   0x0008
+/*********************************************************************
+ * TYPEDEFS
+ */
+typedef void (*keysPressedCB_t)(uint8_t keysPressed);
 
 /*********************************************************************
  * MACROS
  */
 
 /*********************************************************************
- * FUNCTIONS
+ * API FUNCTIONS
  */
-
-/*
- * Task creation function for the Simple BLE Peripheral.
- */
-extern void SimpleBLEPeripheral_createTask(void);
-
 
 /*********************************************************************
-*********************************************************************/
+ * @fn      Board_initKeys
+ *
+ * @brief   Enable interrupts for keys on GPIOs.
+ *
+ * @param   appKeyCB - application key pressed callback
+ *
+ * @return  none
+ */
+void Board_initKeys(keysPressedCB_t appKeyCB);
+
+/*********************************************************************
+*********************************************************************/  
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* SIMPLEBLEPERIPHERAL_H */
+#endif /* BOARD_KEY_H */

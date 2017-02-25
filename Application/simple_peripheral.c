@@ -129,7 +129,8 @@
 // Internal Events for RTOS application
 #define SBP_STATE_CHANGE_EVT                  0x0001
 //#define SBP_CHAR_CHANGE_EVT                   0x0002
-#define SBP_PERIODIC_EVT                      0x0004
+//#define SBP_PERIODIC_EVT                      0x0004
+#define CLICKER_CLK_EVT                     0x0002
 #define SBP_CONN_EVT_END_EVT                  0x0008
 
 /** HID Related **/
@@ -267,9 +268,14 @@ static void SimpleBLEPeripheral_freeAttRsp(uint8_t status);
 
 static void SimpleBLEPeripheral_enqueueMsg(uint8_t event, uint8_t state);
 
+static void clicker_processClkEvt(uint8_t keysPressed);
+
 /* HID Dev related functions */
 static uint8_t clicker_hidDevReportCB(uint8_t id, uint8_t type, uint16_t uuid, uint8_t oper, uint16_t *pLen, uint8_t *pData);
 static void clicker_hidDevEvtCB(uint8_t evt);
+
+/* Button clicking related functions */
+static void clicker_buttonPressedCB(uint8_t keysPressed); // keysPressedCB_t
 
 /* Utils */
 static char *Util_getLocalNameStr(const uint8_t *data);
@@ -422,6 +428,9 @@ static void SimpleBLEPeripheral_init(void)
   Log_info0("Starting HID Device");
   HidDev_StartDevice();
 
+  /** Setup button clicking **/
+  Board_initKeys(clicker_buttonPressedCB);
+
   Log_info0("BLE Peripheral Init finished");
 }
 
@@ -535,6 +544,17 @@ static void clicker_hidDevEvtCB(uint8_t evt) {
     return;
 }
 
+
+/** Button Related **/
+static void clicker_buttonPressedCB(uint8_t keysPressed) {
+    Log_info5("Button pressed. Select: %d, Up: %d, Down: %d, Left: %d, Right: %d",
+              keysPressed & KEY_SELECT,
+              keysPressed & KEY_UP,
+              keysPressed & KEY_DOWN,
+              keysPressed & KEY_LEFT,
+              keysPressed & KEY_RIGHT);
+    SimpleBLEPeripheral_enqueueMsg(CLICKER_CLK_EVT, keysPressed);
+}
 
 
 /*********************************************************************
@@ -720,28 +740,23 @@ static void SimpleBLEPeripheral_processAppMsg(sbpEvt_t *pMsg)
 {
   switch (pMsg->hdr.event)
   {
-    default:
+  case CLICKER_CLK_EVT:
+      clicker_processClkEvt(pMsg->hdr.state);
+  default:
       // Do nothing.
       break;
   }
 }
 
-/*********************************************************************
- * @fn      SimpleBLEPeripheral_clickHandler
- *
- * @brief   Handler function for click events
- *
- * @param   arg - event type
- *
- * @return  None.
- */
-static void SimpleBLEPeripheral_clickHandler(UArg arg)
-{
-  // Store the event.
-  events |= arg;
 
-  // Wake up the application.
-  Semaphore_post(sem);
+static void clicker_processClkEvt(uint8_t keysPressed) {
+    if (keysPressed & KEY_NEXT) {
+        Log_info0("Clicked next");
+    } else if (keysPressed & KEY_PREV) {
+        Log_info0("Clicked previous");
+    } else {
+        Log_warning1("Wierd value for clicker_buttonPressedCB. keysPressed: %d", keysPressed);
+    }
 }
 
 /*********************************************************************

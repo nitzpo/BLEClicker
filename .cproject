@@ -77,6 +77,7 @@
 								<option id="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.LITTLE_ENDIAN.1407341678" name="Little endian code [See 'General' page to edit] (--little_endian, -me)" superClass="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.LITTLE_ENDIAN" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<option id="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.DEFINE.1112705591" name="Pre-define NAME (--define, -D)" superClass="com.ti.ccstudio.buildDefinitions.TMS470_16.9.compilerID.DEFINE" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="${INHERITED_SYMBOLS}"/>
+									<listOptionValue builtIn="false" value="CC2650_LAUNCHXL"/>
 									<listOptionValue builtIn="false" value="${COM_TI_RTSC_TIRTOSCC13XX_CC26XX_SYMBOLS}"/>
 									<listOptionValue builtIn="false" value="USE_ICALL"/>
 									<listOptionValue builtIn="false" value="POWER_SAVING"/>
