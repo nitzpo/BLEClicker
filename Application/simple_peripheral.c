@@ -247,10 +247,6 @@ static uint8_t advertData[] =
 static uint8_t attDeviceName[GAP_DEVICE_NAME_LEN] = "Clicker";
 static uint16_t attDeviceAppearance = GAP_APPEARE_HID_KEYBOARD;
 
-// Globals used for ATT Response retransmission
-static gattMsgEvent_t *pAttRsp = NULL;
-static uint8_t rspTxRetry = 0;
-
 /** HID Dev Variables **/
 // HID dev configuration structure
 static hidDevCfg_t clicker_hidDevCfg =
