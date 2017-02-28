@@ -523,15 +523,6 @@ static void SimpleBLEPeripheral_taskFxn(UArg a0, UArg a1)
         }
       }
     }
-
-    /*
-    if (events & SBP_PERIODIC_EVT)
-    {
-      events &= ~SBP_PERIODIC_EVT;
-
-      // TODO: This is left here as an example on how to handle application events.
-    }
-    */
   }
 }
 
@@ -541,7 +532,7 @@ static void SimpleBLEPeripheral_taskFxn(UArg a0, UArg a1)
 // type: hidDevReportCB_t
 static uint8_t clicker_hidDevReportCB(uint8_t id, uint8_t type, uint16_t uuid,
                                    uint8_t oper, uint16_t *pLen, uint8_t *pData) {
-    // TODO: does nothing
+    // This does nothing. It is nice for debugging and showcase purposes.
     Log_info4("id: %d, type: %d, uuid: %d, oper: %d", id, type, uuid, oper);
     return SUCCESS;
 }
