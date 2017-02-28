@@ -173,11 +173,6 @@
 			<locationURI>virtual:/virtual</locationURI>
 		</link>
 		<link>
-			<name>PROFILES/ext_flash_layout.h</name>
-			<type>1</type>
-			<locationURI>TI_BLE_SDK_BASE/src/common/cc26xx/ext_flash_layout.h</locationURI>
-		</link>
-		<link>
 			<name>PROFILES/gatt_profile_uuid.h</name>
 			<type>1</type>
 			<locationURI>TI_BLE_SDK_BASE/src/inc/gatt_profile_uuid.h</locationURI>

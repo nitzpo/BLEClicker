@@ -185,9 +185,6 @@ static Clock_Struct periodicClock;
 static Queue_Struct appMsg;
 static Queue_Handle appMsgQueue;
 
-// events flag for internal application events.
-static uint16_t events;
-
 // Task configuration
 Task_Struct sbpTask;
 Char sbpTaskStack[SBP_TASK_STACK_SIZE];
@@ -236,7 +233,8 @@ static uint8_t advertData[] =
 
   0x03,
   GAP_ADTYPE_APPEARANCE, // 1 byte
-  GAP_APPEARE_HID_KEYBOARD,
+  LO_UINT16(GAP_APPEARE_HID_KEYBOARD),
+  HI_UINT16(GAP_APPEARE_HID_KEYBOARD),
   // service UUID, to notify central devices what services are included
   // in this peripheral
   0x03,   // length of this data
@@ -247,7 +245,7 @@ static uint8_t advertData[] =
 
 // GAP GATT Attributes
 static uint8_t attDeviceName[GAP_DEVICE_NAME_LEN] = "Clicker";
-// static uint16_t attDeviceAppearance = GAP_APPEARE_HID_KEYBOARD;
+static uint16_t attDeviceAppearance = GAP_APPEARE_HID_KEYBOARD;
 
 // Globals used for ATT Response retransmission
 static gattMsgEvent_t *pAttRsp = NULL;
@@ -273,7 +271,6 @@ static void SimpleBLEPeripheral_taskFxn(UArg a0, UArg a1);
 static uint8_t SimpleBLEPeripheral_processStackMsg(ICall_Hdr *pMsg);
 static uint8_t SimpleBLEPeripheral_processGATTMsg(gattMsgEvent_t *pMsg);
 static void SimpleBLEPeripheral_processAppMsg(sbpEvt_t *pMsg);
-static void SimpleBLEPeripheral_clickHandler(UArg arg);
 
 static void SimpleBLEPeripheral_sendAttRsp(void);
 static void SimpleBLEPeripheral_freeAttRsp(uint8_t status);
@@ -385,7 +382,7 @@ static void SimpleBLEPeripheral_init(void)
     GAPRole_SetParameter(GAPROLE_SCAN_RSP_DATA, sizeof(scanRspData), scanRspData);
     GAPRole_SetParameter(GAPROLE_ADVERT_DATA, sizeof(advertData), advertData);
 
-    //Log_info1("Name in advertData array: \x1b[33m%s\x1b[0m", (IArg)Util_getLocalNameStr(advertData));
+    Log_info1("Name in advertData array: \x1b[33m%s\x1b[0m", (IArg)Util_getLocalNameStr(scanRspData));
 
     GAPRole_SetParameter(GAPROLE_PARAM_UPDATE_ENABLE, sizeof(uint8_t),
                          &enableUpdateRequest);
@@ -401,7 +398,7 @@ static void SimpleBLEPeripheral_init(void)
 
   // Set the GAP Characteristics
   GGS_SetParameter(GGS_DEVICE_NAME_ATT, GAP_DEVICE_NAME_LEN, attDeviceName);
-  // GGS_SetParameter(GGS_APPEARANCE_ATT, sizeof(uint16_t), &attDeviceAppearance);
+  GGS_SetParameter(GGS_APPEARANCE_ATT, sizeof(uint16_t), &attDeviceAppearance);
 
   // Set advertising interval
   {
