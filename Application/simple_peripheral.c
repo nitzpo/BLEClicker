@@ -272,9 +272,6 @@ static uint8_t SimpleBLEPeripheral_processStackMsg(ICall_Hdr *pMsg);
 static uint8_t SimpleBLEPeripheral_processGATTMsg(gattMsgEvent_t *pMsg);
 static void SimpleBLEPeripheral_processAppMsg(sbpEvt_t *pMsg);
 
-static void SimpleBLEPeripheral_sendAttRsp(void);
-static void SimpleBLEPeripheral_freeAttRsp(uint8_t status);
-
 static void SimpleBLEPeripheral_enqueueMsg(uint8_t event, uint8_t state);
 
 static void clicker_processClkEvt(uint8_t keysPressed);
@@ -482,22 +479,8 @@ static void SimpleBLEPeripheral_taskFxn(UArg a0, UArg a1)
 
         if ((src == ICALL_SERVICE_CLASS_BLE) && (dest == selfEntity))
         {
-          ICall_Stack_Event *pEvt = (ICall_Stack_Event *)pMsg;
-
-          // Check for BLE stack events first
-          if (pEvt->signature == 0xffff)
-          {
-            if (pEvt->event_flag & SBP_CONN_EVT_END_EVT)
-            {
-              // Try to retransmit pending ATT Response (if any)
-              SimpleBLEPeripheral_sendAttRsp();
-            }
-          }
-          else
-          {
-            // Process inter-task message
-            safeToDealloc = SimpleBLEPeripheral_processStackMsg((ICall_Hdr *)pMsg);
-          }
+          // Process inter-task message
+          safeToDealloc = SimpleBLEPeripheral_processStackMsg((ICall_Hdr *)pMsg);
         }
 
         if (pMsg && safeToDealloc)
@@ -577,21 +560,6 @@ static uint8_t SimpleBLEPeripheral_processStackMsg(ICall_Hdr *pMsg)
       safeToDealloc = SimpleBLEPeripheral_processGATTMsg((gattMsgEvent_t *)pMsg);
       break;
 
-    case HCI_GAP_EVENT_EVENT:
-      {
-        // Process HCI message
-        switch(pMsg->status)
-        {
-          case HCI_COMMAND_COMPLETE_EVENT_CODE:
-            // Process HCI Command Complete Event
-            break;
-
-          default:
-            break;
-        }
-      }
-      break;
-
     default:
       // do nothing
       break;
@@ -610,121 +578,12 @@ static uint8_t SimpleBLEPeripheral_processStackMsg(ICall_Hdr *pMsg)
 static uint8_t SimpleBLEPeripheral_processGATTMsg(gattMsgEvent_t *pMsg)
 {
   Log_info0("SimpleBLEPeripheral_processGATTMsg() was called.");
-  // See if GATT server was unable to transmit an ATT response
-  if (pMsg->hdr.status == blePending)
-  {
-    // No HCI buffer was available. Let's try to retransmit the response
-    // on the next connection event.
-    Log_info0("Something interesting happened in SimpleBLEPeripheral_processGATTMsg()");
-    if (HCI_EXT_ConnEventNoticeCmd(pMsg->connHandle, selfEntity,
-                                   SBP_CONN_EVT_END_EVT) == SUCCESS)
-    {
-      // First free any pending response
-      SimpleBLEPeripheral_freeAttRsp(FAILURE);
-
-      // Hold on to the response message for retransmission
-      pAttRsp = pMsg;
-
-      // Don't free the response message yet
-      return (FALSE);
-    }
-  }
-  else if (pMsg->method == ATT_FLOW_CTRL_VIOLATED_EVENT)
-  {
-    // ATT request-response or indication-confirmation flow control is
-    // violated. All subsequent ATT requests or indications will be dropped.
-    // The app is informed in case it wants to drop the connection.
-
-    // Display the opcode of the message that caused the violation.
-    Log_info1("FC Violated: %d", pMsg->msg.flowCtrlEvt.opcode);
-  }
-  else if (pMsg->method == ATT_MTU_UPDATED_EVENT)
-  {
-    // MTU size updated
-    Log_info1("MTU Size: $d", pMsg->msg.mtuEvt.MTU);
-  }
 
   // Free message payload. Needed only for ATT Protocol messages
   GATT_bm_free(&pMsg->msg, pMsg->method);
 
   // It's safe to free the incoming message
   return (TRUE);
-}
-
-/*********************************************************************
- * @fn      SimpleBLEPeripheral_sendAttRsp
- *
- * @brief   Send a pending ATT response message.
- *
- * @param   none
- *
- * @return  none
- */
-static void SimpleBLEPeripheral_sendAttRsp(void)
-{
-  Log_info0("SimpleBLEPeripheral_sendAttRsp was called. This is interesting.");
-  // See if there's a pending ATT Response to be transmitted
-  if (pAttRsp != NULL)
-  {
-    uint8_t status;
-
-    // Increment retransmission count
-    rspTxRetry++;
-
-    // Try to retransmit ATT response till either we're successful or
-    // the ATT Client times out (after 30s) and drops the connection.
-    status = GATT_SendRsp(pAttRsp->connHandle, pAttRsp->method, &(pAttRsp->msg));
-    if ((status != blePending) && (status != MSG_BUFFER_NOT_AVAIL))
-    {
-      // Disable connection event end notice
-      HCI_EXT_ConnEventNoticeCmd(pAttRsp->connHandle, selfEntity, 0);
-
-      // We're done with the response message
-      SimpleBLEPeripheral_freeAttRsp(status);
-    }
-    else
-    {
-      // Continue retrying
-      Log_info1("Rsp send retry: %d", rspTxRetry);
-    }
-  }
-}
-
-/*********************************************************************
- * @fn      SimpleBLEPeripheral_freeAttRsp
- *
- * @brief   Free ATT response message.
- *
- * @param   status - response transmit status
- *
- * @return  none
- */
-static void SimpleBLEPeripheral_freeAttRsp(uint8_t status)
-{
-  Log_info0("SimpleBLEPeripheral_freeAttRsp was called. This is interesting.");
-  // See if there's a pending ATT response message
-  if (pAttRsp != NULL)
-  {
-    // See if the response was sent out successfully
-    if (status == SUCCESS)
-    {
-      Log_info1("Rsp sent retry: %d", rspTxRetry);
-    }
-    else
-    {
-      // Free response payload
-      GATT_bm_free(&pAttRsp->msg, pAttRsp->method);
-
-      Log_info1("Rsp retry failed: %d", rspTxRetry);
-    }
-
-    // Free response message
-    ICall_freeMsg(pAttRsp);
-
-    // Reset our globals
-    pAttRsp = NULL;
-    rspTxRetry = 0;
-  }
 }
 
 /*********************************************************************
