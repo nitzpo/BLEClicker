@@ -48,6 +48,8 @@
  * INCLUDES
  */
 
+#include "clicker.h"
+
 #include <xdc/runtime/Error.h>
 
 #include <ti/drivers/Power.h>
@@ -58,7 +60,6 @@
 #include "hal_assert.h"
 #include "bcomdef.h"
 #include "peripheral.h"
-#include "simple_peripheral.h"
 #include "hiddev.h"
 
 #include <ti/drivers/UART.h>

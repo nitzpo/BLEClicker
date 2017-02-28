@@ -84,7 +84,7 @@
 
 #include "board.h"
 
-#include "simple_peripheral.h"
+#include "clicker.h"
 
 /*********************************************************************
  * CONSTANTS

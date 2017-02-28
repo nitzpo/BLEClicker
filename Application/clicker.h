@@ -45,8 +45,8 @@
  Release Date: 2016-10-26 15:20:04
  *****************************************************************************/
 
-#ifndef SIMPLEBLEPERIPHERAL_H
-#define SIMPLEBLEPERIPHERAL_H
+#ifndef CLICKER_H
+#define CLICKER_H
 
 #ifdef __cplusplus
 extern "C"
@@ -90,4 +90,4 @@ extern void Clicker_createTask(void);
 }
 #endif
 
-#endif /* SIMPLEBLEPERIPHERAL_H */
+#endif /* CLICKER_H */
