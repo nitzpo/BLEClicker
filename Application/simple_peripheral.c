@@ -136,9 +136,8 @@
 
 /** HID Related **/
 // timeout in miliseconds. 0 disables timeout
-//#define HID_DEV_IDLE_TIMEOUT  60000
-#define HID_DEV_IDLE_TIMEOUT  0
-// TODO: Change timeout to something reasonable
+#define HID_DEV_IDLE_TIMEOUT  10000
+// 30 secs timeout. After 10 seconds disconnects. Once clicking a button, reconnects automatically.
 
 
 /*********************************************************************
@@ -763,7 +762,10 @@ static void SimpleBLEPeripheral_processAppMsg(sbpEvt_t *pMsg)
 
 
 static void clicker_processClkEvt(uint8_t keysPressed) {
-    // TODO: Add "asserts" that the connection is open etc.
+    // We don't need an open connection!
+    // Reports are queued and will be sent when connection is established.
+    // Also, when HidDev is not advertising, calling HidDev_Report will
+    // cause advertising to start.
     keyboardInputReport_t reportData = { 0 };
     if (keysPressed & (KEY_NEXT | KEY_PREV)) {
         if (keysPressed & KEY_NEXT) {
@@ -773,6 +775,7 @@ static void clicker_processClkEvt(uint8_t keysPressed) {
             Log_info0("Clicked previous");
             reportData.keyCode1 = HID_KEYBOARD_DELETE; // backspace. del is del_fwd
         }
+
         HidDev_Report(HID_RPT_ID_KEY_IN,
                       HID_REPORT_TYPE_INPUT,
                       sizeof(reportData),
