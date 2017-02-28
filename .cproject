@@ -164,7 +164,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="Application/project_zero.c|TOOLS/src|Application/sunlightService_soln.h|Application/sunlightService_soln.c|Application/project_zero_soln.c|Middleware/extflash/ExtFlash.c|Drivers/UDMA/UDMACC26XX.c|Drivers/UART/UARTCC26XX.c|Drivers/UART/UART.c|Drivers/SPI/SPICC26XXDMA.c|Drivers/SPI/SPI.c|Drivers/RF/RFCC26XX_singleMode.c|Drivers/PIN/PINCC26XX.c|Drivers/Display/DisplayUart.c|Drivers/Display/DisplayDogm1286.c|Drivers/Display/Display.c|TOOLS/ccs_linker_defines.cmd|TOOLS/cc26xx_app_oad.cmd|TOOLS/cc26xx_app.cmd|PROFILES/oad_target_external_flash.c|PROFILES/oad.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="TOOLS/src|Middleware/extflash/ExtFlash.c|Drivers/UDMA/UDMACC26XX.c|Drivers/UART/UARTCC26XX.c|Drivers/UART/UART.c|Drivers/SPI/SPICC26XXDMA.c|Drivers/SPI/SPI.c|Drivers/RF/RFCC26XX_singleMode.c|Drivers/PIN/PINCC26XX.c|Drivers/Display/DisplayUart.c|Drivers/Display/DisplayDogm1286.c|Drivers/Display/Display.c|TOOLS/ccs_linker_defines.cmd|TOOLS/cc26xx_app_oad.cmd|TOOLS/cc26xx_app.cmd|PROFILES/oad_target_external_flash.c|PROFILES/oad.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -334,7 +334,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="TOOLS/src|Application/sunlightService_soln.h|Application/sunlightService_soln.c|Application/project_zero_soln.c|Middleware/extflash/ExtFlash.c|Drivers/UDMA/UDMACC26XX.c|Drivers/UART/UARTCC26XX.c|Drivers/UART/UART.c|Drivers/SPI/SPICC26XXDMA.c|Drivers/SPI/SPI.c|Drivers/RF/RFCC26XX_singleMode.c|Drivers/PIN/PINCC26XX.c|Drivers/Display/DisplayUart.c|Drivers/Display/DisplayDogm1286.c|Drivers/Display/Display.c|TOOLS/ccs_linker_defines.cmd|TOOLS/cc26xx_app_oad.cmd|TOOLS/cc26xx_app.cmd|PROFILES/oad_target_external_flash.c|PROFILES/oad.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="TOOLS/src|Middleware/extflash/ExtFlash.c|Drivers/UDMA/UDMACC26XX.c|Drivers/UART/UARTCC26XX.c|Drivers/UART/UART.c|Drivers/SPI/SPICC26XXDMA.c|Drivers/SPI/SPI.c|Drivers/RF/RFCC26XX_singleMode.c|Drivers/PIN/PINCC26XX.c|Drivers/Display/DisplayUart.c|Drivers/Display/DisplayDogm1286.c|Drivers/Display/Display.c|TOOLS/ccs_linker_defines.cmd|TOOLS/cc26xx_app_oad.cmd|TOOLS/cc26xx_app.cmd|PROFILES/oad_target_external_flash.c|PROFILES/oad.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
