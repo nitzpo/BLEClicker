@@ -49,19 +49,16 @@
  */
 #include <string.h>
 
+/* RTOS */
 #include <ti/sysbios/knl/Task.h>
-#include <ti/sysbios/knl/Clock.h>
 #include <ti/sysbios/knl/Semaphore.h>
 #include <ti/sysbios/knl/Queue.h>
 
-#include "hci_tl.h"
+/* XDC */
+#include <xdc/runtime/Log.h>
+
+/* BLE SDK */
 #include "gatt.h"
-#include "linkdb.h"
-
-// HOGP
-#include "hiddev.h"
-#include "hidkbdservice.h"
-
 #include "peripheral.h"
 #include "gapbondmgr.h"
 
@@ -70,17 +67,17 @@
 #include "icall_apimsg.h"
 #include "gatt_profile_uuid.h"
 
-#include "util.h"
+/* HOGP */
+#include "hiddev.h"
+#include "hidkbdservice.h"
 
 #ifdef USE_RCOSC
 #include "rcosc_calibration.h"
 #endif //USE_RCOSC
 
-#include <xdc/runtime/Log.h>
-#include <xdc/runtime/Diags.h>
-
+/* Internal */
+#include "util.h"
 #include "board_key.h"
-
 #include "board.h"
 
 #include "clicker.h"
@@ -176,9 +173,6 @@ static ICall_EntityID selfEntity;
 
 // Semaphore globally used to post events to the application thread
 static ICall_Semaphore sem;
-
-// Clock instances for internal periodic events.
-static Clock_Struct periodicClock;
 
 // Queue object used for app messages
 static Queue_Struct appMsg;
