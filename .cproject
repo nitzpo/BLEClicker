@@ -81,7 +81,7 @@
 									<listOptionValue builtIn="false" value="${COM_TI_RTSC_TIRTOSCC13XX_CC26XX_SYMBOLS}"/>
 									<listOptionValue builtIn="false" value="USE_ICALL"/>
 									<listOptionValue builtIn="false" value="POWER_SAVING"/>
-									<listOptionValue builtIn="false" value="SBP_TASK_STACK_SIZE=700"/>
+									<listOptionValue builtIn="false" value="CLKR_TASK_STACK_SIZE=700"/>
 									<listOptionValue builtIn="false" value="GAPROLE_TASK_STACK_SIZE=520"/>
 									<listOptionValue builtIn="false" value="HEAPMGR_SIZE=0"/>
 									<listOptionValue builtIn="false" value="Display_DISABLE_ALL"/>

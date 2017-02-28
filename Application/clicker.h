@@ -1,12 +1,10 @@
 /******************************************************************************
 
- @file  simple_peripheral.h
+ @file  clicker.h
 
- @brief This file contains the Simple BLE Peripheral sample application
-        definitions and prototypes.
+ @brief This file contains the BLE HID Clicker definitions and prototypes.
 
- Group: WCS, BTS
- Target Device: CC2650, CC2640, CC1350
+ Target Device: CC2650
 
  ******************************************************************************
  
@@ -45,8 +43,8 @@
  Release Date: 2016-10-26 15:20:04
  *****************************************************************************/
 
-#ifndef SIMPLEBLEPERIPHERAL_H
-#define SIMPLEBLEPERIPHERAL_H
+#ifndef CLICKER_H
+#define CLICKER_H
 
 #ifdef __cplusplus
 extern "C"
@@ -78,9 +76,9 @@ extern "C"
  */
 
 /*
- * Task creation function for the Simple BLE Peripheral.
+ * Task creation function for the Clicker app.
  */
-extern void SimpleBLEPeripheral_createTask(void);
+extern void Clicker_createTask(void);
 
 
 /*********************************************************************
@@ -90,4 +88,4 @@ extern void SimpleBLEPeripheral_createTask(void);
 }
 #endif
 
-#endif /* SIMPLEBLEPERIPHERAL_H */
+#endif /* CLICKER_H */

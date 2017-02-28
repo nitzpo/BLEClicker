@@ -1,12 +1,11 @@
 /******************************************************************************
 
- @file  simple_peripheral.c
+ @file  clicker.c
 
- @brief This file contains the Simple BLE Peripheral sample application for use
-        with the CC2650 Bluetooth Low Energy Protocol Stack.
+ @brief This file contains a BLE HID Clicker implementation,
+        based on the HID Keyboard service, Simple BLE Peripheral and Project zero examples from the Simplelink BLE SDK.
 
- Group: WCS, BTS
- Target Device: CC2650, CC2640, CC1350
+ Target Device: CC2650
 
  ******************************************************************************
  
@@ -84,7 +83,7 @@
 
 #include "board.h"
 
-#include "simple_peripheral.h"
+#include "clicker.h"
 
 /*********************************************************************
  * CONSTANTS
@@ -120,19 +119,19 @@
 #define DEFAULT_CONN_PAUSE_PERIPHERAL         6
 
 // Task configuration
-#define SBP_TASK_PRIORITY                     1
+#define CLKR_TASK_PRIORITY                     1
 
 
-#ifndef SBP_TASK_STACK_SIZE
-#define SBP_TASK_STACK_SIZE                   644
+#ifndef CLKR_TASK_STACK_SIZE
+#define CLKR_TASK_STACK_SIZE                   644
 #endif
 
 // Internal Events for RTOS application
-#define SBP_STATE_CHANGE_EVT                  0x0001
-//#define SBP_CHAR_CHANGE_EVT                   0x0002
-//#define SBP_PERIODIC_EVT                      0x0004
+#define CLKR_STATE_CHANGE_EVT                  0x0001
+//#define CLKR_CHAR_CHANGE_EVT                   0x0002
+//#define CLKR_PERIODIC_EVT                      0x0004
 #define CLICKER_CLK_EVT                     0x0002
-#define SBP_CONN_EVT_END_EVT                  0x0008
+#define CLKR_CONN_EVT_END_EVT                  0x0008
 
 /** HID Related **/
 // timeout in miliseconds. 0 disables timeout
@@ -187,7 +186,7 @@ static Queue_Handle appMsgQueue;
 
 // Task configuration
 Task_Struct sbpTask;
-Char sbpTaskStack[SBP_TASK_STACK_SIZE];
+Char sbpTaskStack[CLKR_TASK_STACK_SIZE];
 
 // Profile state and parameters
 //static gaprole_States_t gapProfileState = GAPROLE_INIT;
@@ -249,7 +248,7 @@ static uint16_t attDeviceAppearance = GAP_APPEARE_HID_KEYBOARD;
 
 /** HID Dev Variables **/
 // HID dev configuration structure
-static hidDevCfg_t clicker_hidDevCfg =
+static hidDevCfg_t Clicker_hidDevCfg =
 {
   // uint32_t    idleTimeout;      // Idle timeout in milliseconds
   HID_DEV_IDLE_TIMEOUT,
@@ -261,23 +260,23 @@ static hidDevCfg_t clicker_hidDevCfg =
  * LOCAL FUNCTIONS
  */
 
-static void SimpleBLEPeripheral_init( void );
-static void SimpleBLEPeripheral_taskFxn(UArg a0, UArg a1);
+static void Clicker_init( void );
+static void Clicker_taskFxn(UArg a0, UArg a1);
 
-static uint8_t SimpleBLEPeripheral_processStackMsg(ICall_Hdr *pMsg);
-static uint8_t SimpleBLEPeripheral_processGATTMsg(gattMsgEvent_t *pMsg);
-static void SimpleBLEPeripheral_processAppMsg(sbpEvt_t *pMsg);
+static uint8_t Clicker_processStackMsg(ICall_Hdr *pMsg);
+static uint8_t Clicker_processGATTMsg(gattMsgEvent_t *pMsg);
+static void Clicker_processAppMsg(sbpEvt_t *pMsg);
 
-static void SimpleBLEPeripheral_enqueueMsg(uint8_t event, uint8_t state);
+static void Clicker_enqueueMsg(uint8_t event, uint8_t state);
 
-static void clicker_processClkEvt(uint8_t keysPressed);
+static void Clicker_processClkEvt(uint8_t keysPressed);
 
 /* HID Dev related functions */
-static uint8_t clicker_hidDevReportCB(uint8_t id, uint8_t type, uint16_t uuid, uint8_t oper, uint16_t *pLen, uint8_t *pData);
-static void clicker_hidDevEvtCB(uint8_t evt);
+static uint8_t Clicker_hidDevReportCB(uint8_t id, uint8_t type, uint16_t uuid, uint8_t oper, uint16_t *pLen, uint8_t *pData);
+static void Clicker_hidDevEvtCB(uint8_t evt);
 
 /* Button clicking related functions */
-static void clicker_buttonPressedCB(uint8_t keysPressed); // keysPressedCB_t
+static void Clicker_buttonPressedCB(uint8_t keysPressed); // keysPressedCB_t
 
 /* Utils */
 static char *Util_getLocalNameStr(const uint8_t *data);
@@ -286,10 +285,10 @@ static char *Util_getLocalNameStr(const uint8_t *data);
  * PROFILE CALLBACKS
  */
 
-static hidDevCB_t clicker_CBs =
+static hidDevCB_t Clicker_CBs =
 {
-     clicker_hidDevReportCB, // HID Report Callback
-     clicker_hidDevEvtCB, // HID event callback
+     Clicker_hidDevReportCB, // HID Report Callback
+     Clicker_hidDevEvtCB, // HID event callback
      NULL // HID Passcode callback, nullable
 };
 
@@ -298,29 +297,29 @@ static hidDevCB_t clicker_CBs =
  */
 
 /*********************************************************************
- * @fn      SimpleBLEPeripheral_createTask
+ * @fn      Clicker_createTask
  *
- * @brief   Task creation function for the Simple BLE Peripheral.
+ * @brief   Task creation function for the Clicker app.
  *
  * @param   None.
  *
  * @return  None.
  */
-void SimpleBLEPeripheral_createTask(void)
+void Clicker_createTask(void)
 {
   Task_Params taskParams;
 
   // Configure task
   Task_Params_init(&taskParams);
   taskParams.stack = sbpTaskStack;
-  taskParams.stackSize = SBP_TASK_STACK_SIZE;
-  taskParams.priority = SBP_TASK_PRIORITY;
+  taskParams.stackSize = CLKR_TASK_STACK_SIZE;
+  taskParams.priority = CLKR_TASK_PRIORITY;
 
-  Task_construct(&sbpTask, SimpleBLEPeripheral_taskFxn, &taskParams, NULL);
+  Task_construct(&sbpTask, Clicker_taskFxn, &taskParams, NULL);
 }
 
 /*********************************************************************
- * @fn      SimpleBLEPeripheral_init
+ * @fn      Clicker_init
  *
  * @brief   Called during initialization and contains application
  *          specific initialization (ie. hardware initialization/setup,
@@ -331,7 +330,7 @@ void SimpleBLEPeripheral_createTask(void)
  *
  * @return  None.
  */
-static void SimpleBLEPeripheral_init(void)
+static void Clicker_init(void)
 {
   // ******************************************************************
   // N0 STACK API CALLS CAN OCCUR BEFORE THIS CALL TO ICall_registerApp
@@ -421,7 +420,7 @@ static void SimpleBLEPeripheral_init(void)
 
   /** HidDev **/
   Log_info0("Registering Hid Device");
-  HidDev_Register(&clicker_hidDevCfg, &clicker_CBs);
+  HidDev_Register(&Clicker_hidDevCfg, &Clicker_CBs);
 
   /** Hid Keyboard **/
   HidKbd_AddService();
@@ -431,25 +430,25 @@ static void SimpleBLEPeripheral_init(void)
   HidDev_StartDevice();
 
   /** Setup button clicking **/
-  Board_initKeys(clicker_buttonPressedCB);
+  Board_initKeys(Clicker_buttonPressedCB);
 
   Log_info0("BLE Peripheral Init finished");
 }
 
 /*********************************************************************
- * @fn      SimpleBLEPeripheral_taskFxn
+ * @fn      Clicker_taskFxn
  *
- * @brief   Application task entry point for the Simple BLE Peripheral.
+ * @brief   Application task entry point for the Clicker app.
  *
  * @param   a0, a1 - not used.
  *
  * @return  None.
  */
-static void SimpleBLEPeripheral_taskFxn(UArg a0, UArg a1)
+static void Clicker_taskFxn(UArg a0, UArg a1)
 {
   Log_info0("Starting taskFxn");
   // Initialize application
-  SimpleBLEPeripheral_init();
+  Clicker_init();
 
   // Application main loop
   for (;;)
@@ -458,9 +457,9 @@ static void SimpleBLEPeripheral_taskFxn(UArg a0, UArg a1)
     // Note that the semaphore associated with a thread is signaled when a
     // message is queued to the message receive queue of the thread or when
     // ICall_signal() function is called onto the semaphore.
-    Log_info0("SBP is waiting for messages");
+    Log_info0("CLKR is waiting for messages");
     ICall_Errno errno = ICall_wait(ICALL_TIMEOUT_FOREVER);
-    Log_info0("A message was queued for SimpleBLEPeripheral task");
+    Log_info0("A message was queued for Clicker task");
 
     if (errno == ICALL_ERRNO_SUCCESS)
     {
@@ -476,7 +475,7 @@ static void SimpleBLEPeripheral_taskFxn(UArg a0, UArg a1)
         if ((src == ICALL_SERVICE_CLASS_BLE) && (dest == selfEntity))
         {
           // Process inter-task message
-          safeToDealloc = SimpleBLEPeripheral_processStackMsg((ICall_Hdr *)pMsg);
+          safeToDealloc = Clicker_processStackMsg((ICall_Hdr *)pMsg);
         }
 
         if (pMsg && safeToDealloc)
@@ -492,7 +491,7 @@ static void SimpleBLEPeripheral_taskFxn(UArg a0, UArg a1)
         if (pMsg)
         {
           // Process message.
-          SimpleBLEPeripheral_processAppMsg(pMsg);
+          Clicker_processAppMsg(pMsg);
 
           // Free the space from the message.
           ICall_free(pMsg);
@@ -506,7 +505,7 @@ static void SimpleBLEPeripheral_taskFxn(UArg a0, UArg a1)
 
 // HID Report callback
 // type: hidDevReportCB_t
-static uint8_t clicker_hidDevReportCB(uint8_t id, uint8_t type, uint16_t uuid,
+static uint8_t Clicker_hidDevReportCB(uint8_t id, uint8_t type, uint16_t uuid,
                                    uint8_t oper, uint16_t *pLen, uint8_t *pData) {
     // This does nothing. It is nice for debugging and showcase purposes.
     Log_info4("id: %d, type: %d, uuid: %d, oper: %d", id, type, uuid, oper);
@@ -515,8 +514,8 @@ static uint8_t clicker_hidDevReportCB(uint8_t id, uint8_t type, uint16_t uuid,
 
 // HID event callback
 // type: hidDevEvtCB_t
-static void clicker_hidDevEvtCB(uint8_t evt) {
-    Log_info1("clicker hidDevEvtCB evt: %d", evt);
+static void Clicker_hidDevEvtCB(uint8_t evt) {
+    Log_info1("Clicker hidDevEvtCB evt: %d", evt);
     if (HID_DEV_GAPROLE_STATE_CHANGE_EVT == evt) {
         Log_info0("HID device state change evt!");
     }
@@ -525,19 +524,19 @@ static void clicker_hidDevEvtCB(uint8_t evt) {
 
 
 /** Button Related **/
-static void clicker_buttonPressedCB(uint8_t keysPressed) {
+static void Clicker_buttonPressedCB(uint8_t keysPressed) {
     Log_info5("Button pressed. Select: %d, Up: %d, Down: %d, Left: %d, Right: %d",
               keysPressed & KEY_SELECT,
               keysPressed & KEY_UP,
               keysPressed & KEY_DOWN,
               keysPressed & KEY_LEFT,
               keysPressed & KEY_RIGHT);
-    SimpleBLEPeripheral_enqueueMsg(CLICKER_CLK_EVT, keysPressed);
+    Clicker_enqueueMsg(CLICKER_CLK_EVT, keysPressed);
 }
 
 
 /*********************************************************************
- * @fn      SimpleBLEPeripheral_processStackMsg
+ * @fn      Clicker_processStackMsg
  *
  * @brief   Process an incoming stack message.
  *
@@ -545,7 +544,7 @@ static void clicker_buttonPressedCB(uint8_t keysPressed) {
  *
  * @return  TRUE if safe to deallocate incoming message, FALSE otherwise.
  */
-static uint8_t SimpleBLEPeripheral_processStackMsg(ICall_Hdr *pMsg)
+static uint8_t Clicker_processStackMsg(ICall_Hdr *pMsg)
 {
   uint8_t safeToDealloc = TRUE;
 
@@ -553,7 +552,7 @@ static uint8_t SimpleBLEPeripheral_processStackMsg(ICall_Hdr *pMsg)
   {
     case GATT_MSG_EVENT:
       // Process GATT message
-      safeToDealloc = SimpleBLEPeripheral_processGATTMsg((gattMsgEvent_t *)pMsg);
+      safeToDealloc = Clicker_processGATTMsg((gattMsgEvent_t *)pMsg);
       break;
 
     default:
@@ -565,15 +564,15 @@ static uint8_t SimpleBLEPeripheral_processStackMsg(ICall_Hdr *pMsg)
 }
 
 /*********************************************************************
- * @fn      SimpleBLEPeripheral_processGATTMsg
+ * @fn      Clicker_processGATTMsg
  *
  * @brief   Process GATT messages and events.
  *
  * @return  TRUE if safe to deallocate incoming message, FALSE otherwise.
  */
-static uint8_t SimpleBLEPeripheral_processGATTMsg(gattMsgEvent_t *pMsg)
+static uint8_t Clicker_processGATTMsg(gattMsgEvent_t *pMsg)
 {
-  Log_info0("SimpleBLEPeripheral_processGATTMsg() was called.");
+  Log_info0("Clicker_processGATTMsg() was called.");
 
   // Free message payload. Needed only for ATT Protocol messages
   GATT_bm_free(&pMsg->msg, pMsg->method);
@@ -583,7 +582,7 @@ static uint8_t SimpleBLEPeripheral_processGATTMsg(gattMsgEvent_t *pMsg)
 }
 
 /*********************************************************************
- * @fn      SimpleBLEPeripheral_processAppMsg
+ * @fn      Clicker_processAppMsg
  *
  * @brief   Process an incoming callback from a profile.
  *
@@ -591,12 +590,12 @@ static uint8_t SimpleBLEPeripheral_processGATTMsg(gattMsgEvent_t *pMsg)
  *
  * @return  None.
  */
-static void SimpleBLEPeripheral_processAppMsg(sbpEvt_t *pMsg)
+static void Clicker_processAppMsg(sbpEvt_t *pMsg)
 {
   switch (pMsg->hdr.event)
   {
   case CLICKER_CLK_EVT:
-      clicker_processClkEvt(pMsg->hdr.state);
+      Clicker_processClkEvt(pMsg->hdr.state);
   default:
       // Do nothing.
       break;
@@ -604,7 +603,7 @@ static void SimpleBLEPeripheral_processAppMsg(sbpEvt_t *pMsg)
 }
 
 
-static void clicker_processClkEvt(uint8_t keysPressed) {
+static void Clicker_processClkEvt(uint8_t keysPressed) {
     // We don't need an open connection!
     // Reports are queued and will be sent when connection is established.
     // Also, when HidDev is not advertising, calling HidDev_Report will
@@ -631,12 +630,12 @@ static void clicker_processClkEvt(uint8_t keysPressed) {
                       sizeof(reportData),
                       (uint8_t*)&reportData);
     } else {
-        Log_warning1("Wierd value for clicker_buttonPressedCB. keysPressed: %d", keysPressed);
+        Log_warning1("Wierd value for Clicker_buttonPressedCB. keysPressed: %d", keysPressed);
     }
 }
 
 /*********************************************************************
- * @fn      SimpleBLEPeripheral_enqueueMsg
+ * @fn      Clicker_enqueueMsg
  *
  * @brief   Creates a message and puts the message in RTOS queue.
  *
@@ -645,7 +644,7 @@ static void clicker_processClkEvt(uint8_t keysPressed) {
  *
  * @return  None.
  */
-static void SimpleBLEPeripheral_enqueueMsg(uint8_t event, uint8_t state)
+static void Clicker_enqueueMsg(uint8_t event, uint8_t state)
 {
   sbpEvt_t *pMsg;
 
