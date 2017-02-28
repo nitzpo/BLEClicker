@@ -152,7 +152,7 @@ int main()
   HidDev_createTask();
 
   // ProjectZero_createTask();
-  SimpleBLEPeripheral_createTask();
+  Clicker_createTask();
 
   /* enable interrupts and start SYS/BIOS */
   BIOS_start();
