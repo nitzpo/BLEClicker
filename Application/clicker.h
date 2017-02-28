@@ -54,6 +54,8 @@ extern "C"
 /*********************************************************************
  * INCLUDES
  */
+#include <stdint.h>
+#include "board_key.h"
 
 /*********************************************************************
 *  EXTERNAL VARIABLES
@@ -63,9 +65,10 @@ extern "C"
  * CONSTANTS
  */
 
+/* Clicker next and previous keys */
 // Copied from KEY_LEFT and KEY_RIGHT in board_key.h
-#define KEY_NEXT    0x0010
-#define KEY_PREV   0x0008
+#define KEY_PREV    KEY_LEFT
+#define KEY_NEXT    KEY_RIGHT
 
 /*********************************************************************
  * MACROS

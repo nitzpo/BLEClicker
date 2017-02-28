@@ -90,7 +90,8 @@
  */
 
 // Restart advertising on disconnection
-#define AUTO_ADV    FALSE
+// If FALSE, will restart advertising on first report.
+#define AUTO_ADV                              FALSE
 
 // Battery measurement period in ms.
 #define DEFAULT_BATT_PERIOD                   15000

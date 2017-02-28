@@ -93,6 +93,28 @@
 // General discoverable mode advertises indefinitely
 #define DEFAULT_DISCOVERABLE_MODE             GAP_ADTYPE_FLAGS_GENERAL
 
+/** Connection Parameters **/
+/* Connection Parameter Specifications from the internet:
+ *
+ * Connection interval:
+ * Determines how often the Central will ask for data from the Peripheral.
+ * When the Peripheral requests an update, it supplies a maximum and a minimum wanted interval.
+ * The connection interval must be between 7.5 ms and 4 s.
+ *
+ * Slave latency:
+ * By setting a non-zero slave latency, the Peripheral can choose to not answer when the Central asks for data up to the slave latency number of times.
+ * However, if the Peripheral has data to send, it can choose to send data at any time.
+ * This enables a peripheral to stay sleeping for a longer time, if it doesn't have data to send, but still send data fast if needed.
+ * The text book example of such device is for example keyboard and mice,
+ * which want to be sleeping for as long as possible when there is no data to send,
+ * but still have low latency (and for the mouse: low connection interval) when needed.
+ *
+ * Connection supervision timeout:
+ * This timeout determines the timeout from the last data exchange till a link is considered lost.
+ * A Central will not start trying to reconnect before the timeout has passed, so if you have a device which goes in and out of range often,
+ * and you need to notice when that happens, it might make sense to have a short timeout.
+ */
+
 // Minimum connection interval (units of 1.25ms, 80=100ms) if automatic
 // parameter update request is enabled
 #define DEFAULT_DESIRED_MIN_CONN_INTERVAL     80
@@ -115,6 +137,8 @@
 // Connection Pause Peripheral time value (in seconds)
 #define DEFAULT_CONN_PAUSE_PERIPHERAL         6
 
+/** End of Connection Parameters **/
+
 // Task configuration
 #define CLKR_TASK_PRIORITY                     1
 
@@ -125,10 +149,7 @@
 
 // Internal Events for RTOS application
 #define CLKR_STATE_CHANGE_EVT                  0x0001
-//#define CLKR_CHAR_CHANGE_EVT                   0x0002
-//#define CLKR_PERIODIC_EVT                      0x0004
-#define CLICKER_CLK_EVT                     0x0002
-#define CLKR_CONN_EVT_END_EVT                  0x0008
+#define CLICKER_CLK_EVT                        0x0002
 
 /** HID Related **/
 // timeout in miliseconds. 0 disables timeout
@@ -144,7 +165,7 @@
 typedef struct
 {
   appEvtHdr_t hdr;  // event header.
-} sbpEvt_t;
+} clickerEvt_t;
 
 typedef struct
 {
@@ -168,6 +189,8 @@ typedef struct
  * LOCAL VARIABLES
  */
 
+/** App Variables **/
+
 // Entity ID globally used to check for source and/or destination of messages
 static ICall_EntityID selfEntity;
 
@@ -179,11 +202,10 @@ static Queue_Struct appMsg;
 static Queue_Handle appMsgQueue;
 
 // Task configuration
-Task_Struct sbpTask;
-Char sbpTaskStack[CLKR_TASK_STACK_SIZE];
+Task_Struct clickerTask;
+Char clickerTaskStack[CLKR_TASK_STACK_SIZE];
 
-// Profile state and parameters
-//static gaprole_States_t gapProfileState = GAPROLE_INIT;
+/** BLE Variables **/
 
 // GAP - SCAN RSP data (max size = 31 bytes)
 static uint8_t scanRspData[] =
@@ -202,9 +224,9 @@ static uint8_t scanRspData[] =
   // connection interval range
   0x05,   // length of this data
   GAP_ADTYPE_SLAVE_CONN_INTERVAL_RANGE,
-  LO_UINT16(DEFAULT_DESIRED_MIN_CONN_INTERVAL),   // 100ms
+  LO_UINT16(DEFAULT_DESIRED_MIN_CONN_INTERVAL),
   HI_UINT16(DEFAULT_DESIRED_MIN_CONN_INTERVAL),
-  LO_UINT16(DEFAULT_DESIRED_MAX_CONN_INTERVAL),   // 1s
+  LO_UINT16(DEFAULT_DESIRED_MAX_CONN_INTERVAL),
   HI_UINT16(DEFAULT_DESIRED_MAX_CONN_INTERVAL),
 
   // Tx power level
@@ -224,14 +246,16 @@ static uint8_t advertData[] =
   GAP_ADTYPE_FLAGS,
   DEFAULT_DISCOVERABLE_MODE | GAP_ADTYPE_FLAGS_BREDR_NOT_SUPPORTED,
 
+  // Appearance. Show this device as a keyboard on compatible hosts.
   0x03,
   GAP_ADTYPE_APPEARANCE, // 1 byte
   LO_UINT16(GAP_APPEARE_HID_KEYBOARD),
   HI_UINT16(GAP_APPEARE_HID_KEYBOARD),
+
   // service UUID, to notify central devices what services are included
   // in this peripheral
-  0x03,   // length of this data
-  GAP_ADTYPE_16BIT_MORE,      // some of the UUID's, but not all
+  0x03,                         // length of this data
+  GAP_ADTYPE_16BIT_MORE,        // some of the UUID's, but not all
   LO_UINT16(HID_SERV_UUID),
   HI_UINT16(HID_SERV_UUID)
 };
@@ -240,14 +264,16 @@ static uint8_t advertData[] =
 static uint8_t attDeviceName[GAP_DEVICE_NAME_LEN] = "Clicker";
 static uint16_t attDeviceAppearance = GAP_APPEARE_HID_KEYBOARD;
 
+
 /** HID Dev Variables **/
+
 // HID dev configuration structure
 static hidDevCfg_t Clicker_hidDevCfg =
 {
-  // uint32_t    idleTimeout;      // Idle timeout in milliseconds
+  // uint32_t    idleTimeout;       // Idle timeout in milliseconds
   HID_DEV_IDLE_TIMEOUT,
-  // uint8_t     hidFlags;         // HID feature flags
-  HID_KBD_FLAGS // Actually: RemoteWake. Defined in hidkbdservice
+  // uint8_t     hidFlags;          // HID feature flags
+  HID_KBD_FLAGS                     // Actually: RemoteWake. Defined in hidkbdservice
 };
 
 /*********************************************************************
@@ -259,20 +285,20 @@ static void Clicker_taskFxn(UArg a0, UArg a1);
 
 static uint8_t Clicker_processStackMsg(ICall_Hdr *pMsg);
 static uint8_t Clicker_processGATTMsg(gattMsgEvent_t *pMsg);
-static void Clicker_processAppMsg(sbpEvt_t *pMsg);
+static void Clicker_processAppMsg(clickerEvt_t *pMsg);
 
 static void Clicker_enqueueMsg(uint8_t event, uint8_t state);
 
 static void Clicker_processClkEvt(uint8_t keysPressed);
 
-/* HID Dev related functions */
+/** HID Dev related functions **/
 static uint8_t Clicker_hidDevReportCB(uint8_t id, uint8_t type, uint16_t uuid, uint8_t oper, uint16_t *pLen, uint8_t *pData);
 static void Clicker_hidDevEvtCB(uint8_t evt);
 
-/* Button clicking related functions */
+/** Button clicking related functions **/
 static void Clicker_buttonPressedCB(uint8_t keysPressed); // keysPressedCB_t
 
-/* Utils */
+/** Utils **/
 static char *Util_getLocalNameStr(const uint8_t *data);
 
 /*********************************************************************
@@ -305,11 +331,107 @@ void Clicker_createTask(void)
 
   // Configure task
   Task_Params_init(&taskParams);
-  taskParams.stack = sbpTaskStack;
+  taskParams.stack = clickerTaskStack;
   taskParams.stackSize = CLKR_TASK_STACK_SIZE;
   taskParams.priority = CLKR_TASK_PRIORITY;
 
-  Task_construct(&sbpTask, Clicker_taskFxn, &taskParams, NULL);
+  Task_construct(&clickerTask, Clicker_taskFxn, &taskParams, NULL);
+}
+
+/*********************************************************************
+ * IMPLEMENTATIONS
+ */
+
+/** External Callbacks **/
+
+/*********************************************************************
+ * @fn      Clicker_hidDevReportCB
+ * @fntype  hidDevReportCB_t
+ *
+ * @brief   HID Report callback
+ *
+ * @return  Error code.
+ */
+static uint8_t Clicker_hidDevReportCB(uint8_t id, uint8_t type, uint16_t uuid,
+                                   uint8_t oper, uint16_t *pLen, uint8_t *pData) {
+    // This does nothing. It is nice for debugging and showcase purposes.
+    Log_info4("id: %d, type: %d, uuid: %d, oper: %d", id, type, uuid, oper);
+    return SUCCESS;
+}
+
+/*********************************************************************
+ * @fn      Clicker_hidDevEvtCB
+ * @fntype  hidDevEvtCB_t
+ *
+ * @brief   HID event callback
+ *
+ * @return  Error code.
+ */
+static void Clicker_hidDevEvtCB(uint8_t evt) {
+    Log_info1("Clicker hidDevEvtCB evt: %d", evt);
+    if (HID_DEV_GAPROLE_STATE_CHANGE_EVT == evt) {
+        Log_info0("HID device state change evt!");
+    }
+    return;
+}
+
+/*********************************************************************
+ * @fn      Clicker_buttonPressedCB
+ *
+ * @brief   Callback being called on a button press.
+ *
+ * @return  Error code.
+ */
+static void Clicker_buttonPressedCB(uint8_t keysPressed) {
+    Log_info5("Button pressed. Select: %d, Up: %d, Down: %d, Left: %d, Right: %d",
+              keysPressed & KEY_SELECT,
+              keysPressed & KEY_UP,
+              keysPressed & KEY_DOWN,
+              keysPressed & KEY_LEFT,
+              keysPressed & KEY_RIGHT);
+    Clicker_enqueueMsg(CLICKER_CLK_EVT, keysPressed);
+}
+
+/** End External Callbacks **/
+
+/*********************************************************************
+ * @fn      Clicker_processClkEvt
+ *
+ * @brief   Handle a key press of the clicker and send the relevant keys.
+ *
+ * @param   keysPressed - a bit mask of the keys pressed, according to board_key.h.
+ *
+ * @return  None.
+ */
+static void Clicker_processClkEvt(uint8_t keysPressed) {
+    // We don't need an open connection!
+    // Reports are queued and will be sent when connection is established.
+    // Also, when HidDev is not advertising, calling HidDev_Report will
+    // cause advertising to start.
+    keyboardInputReport_t reportData = { 0 };
+    if (keysPressed & (KEY_NEXT | KEY_PREV)) {
+        if (keysPressed & KEY_NEXT) {
+            Log_info0("Clicked next");
+            reportData.keyCode1 = HID_KEYBOARD_SPACEBAR;
+        } else if (keysPressed & KEY_PREV) {
+            Log_info0("Clicked previous");
+            reportData.keyCode1 = HID_KEYBOARD_DELETE; // this is backspace; delete is del_fwd
+        }
+
+        HidDev_Report(HID_RPT_ID_KEY_IN,
+                      HID_REPORT_TYPE_INPUT,
+                      sizeof(reportData),
+                      (uint8_t*)&reportData);
+
+        // Release the key
+        reportData.keyCode1 = HID_KEYBOARD_RESERVED;
+        HidDev_Report(HID_RPT_ID_KEY_IN,
+                      HID_REPORT_TYPE_INPUT,
+                      sizeof(reportData),
+                      (uint8_t*)&reportData);
+    } else {
+        Log_warning1("Weird value for Clicker_buttonPressedCB. keysPressed: %d", keysPressed);
+    }
 }
 
 /*********************************************************************
@@ -368,7 +490,7 @@ static void Clicker_init(void)
     GAPRole_SetParameter(GAPROLE_SCAN_RSP_DATA, sizeof(scanRspData), scanRspData);
     GAPRole_SetParameter(GAPROLE_ADVERT_DATA, sizeof(advertData), advertData);
 
-    Log_info1("Name in advertData array: \x1b[33m%s\x1b[0m", (IArg)Util_getLocalNameStr(scanRspData));
+    Log_info1("Name in scanRspData array: \x1b[33m%s\x1b[0m", (IArg)Util_getLocalNameStr(scanRspData));
 
     GAPRole_SetParameter(GAPROLE_PARAM_UPDATE_ENABLE, sizeof(uint8_t),
                          &enableUpdateRequest);
@@ -412,21 +534,20 @@ static void Clicker_init(void)
     GAPBondMgr_SetParameter(GAPBOND_BONDING_ENABLED, sizeof(uint8_t), &bonding);
   }
 
-  /** HidDev **/
+  /** Hid Dev **/
   Log_info0("Registering Hid Device");
   HidDev_Register(&Clicker_hidDevCfg, &Clicker_CBs);
 
-  /** Hid Keyboard **/
   HidKbd_AddService();
 
-  /** Hid Dev **/
   Log_info0("Starting HID Device");
   HidDev_StartDevice();
 
   /** Setup button clicking **/
+  Log_info0("Setting up key press handling");
   Board_initKeys(Clicker_buttonPressedCB);
 
-  Log_info0("BLE Peripheral Init finished");
+  Log_info0("Clicker_init finished");
 }
 
 /*********************************************************************
@@ -481,7 +602,7 @@ static void Clicker_taskFxn(UArg a0, UArg a1)
       // If RTOS queue is not empty, process app message.
       while (!Queue_empty(appMsgQueue))
       {
-        sbpEvt_t *pMsg = (sbpEvt_t *)Util_dequeueMsg(appMsgQueue);
+        clickerEvt_t *pMsg = (clickerEvt_t *)Util_dequeueMsg(appMsgQueue);
         if (pMsg)
         {
           // Process message.
@@ -494,40 +615,6 @@ static void Clicker_taskFxn(UArg a0, UArg a1)
     }
   }
 }
-
-/** HID Callbacks **/
-
-// HID Report callback
-// type: hidDevReportCB_t
-static uint8_t Clicker_hidDevReportCB(uint8_t id, uint8_t type, uint16_t uuid,
-                                   uint8_t oper, uint16_t *pLen, uint8_t *pData) {
-    // This does nothing. It is nice for debugging and showcase purposes.
-    Log_info4("id: %d, type: %d, uuid: %d, oper: %d", id, type, uuid, oper);
-    return SUCCESS;
-}
-
-// HID event callback
-// type: hidDevEvtCB_t
-static void Clicker_hidDevEvtCB(uint8_t evt) {
-    Log_info1("Clicker hidDevEvtCB evt: %d", evt);
-    if (HID_DEV_GAPROLE_STATE_CHANGE_EVT == evt) {
-        Log_info0("HID device state change evt!");
-    }
-    return;
-}
-
-
-/** Button Related **/
-static void Clicker_buttonPressedCB(uint8_t keysPressed) {
-    Log_info5("Button pressed. Select: %d, Up: %d, Down: %d, Left: %d, Right: %d",
-              keysPressed & KEY_SELECT,
-              keysPressed & KEY_UP,
-              keysPressed & KEY_DOWN,
-              keysPressed & KEY_LEFT,
-              keysPressed & KEY_RIGHT);
-    Clicker_enqueueMsg(CLICKER_CLK_EVT, keysPressed);
-}
-
 
 /*********************************************************************
  * @fn      Clicker_processStackMsg
@@ -584,7 +671,7 @@ static uint8_t Clicker_processGATTMsg(gattMsgEvent_t *pMsg)
  *
  * @return  None.
  */
-static void Clicker_processAppMsg(sbpEvt_t *pMsg)
+static void Clicker_processAppMsg(clickerEvt_t *pMsg)
 {
   switch (pMsg->hdr.event)
   {
@@ -594,38 +681,6 @@ static void Clicker_processAppMsg(sbpEvt_t *pMsg)
       // Do nothing.
       break;
   }
-}
-
-
-static void Clicker_processClkEvt(uint8_t keysPressed) {
-    // We don't need an open connection!
-    // Reports are queued and will be sent when connection is established.
-    // Also, when HidDev is not advertising, calling HidDev_Report will
-    // cause advertising to start.
-    keyboardInputReport_t reportData = { 0 };
-    if (keysPressed & (KEY_NEXT | KEY_PREV)) {
-        if (keysPressed & KEY_NEXT) {
-            Log_info0("Clicked next");
-            reportData.keyCode1 = HID_KEYBOARD_SPACEBAR;
-        } else if (keysPressed & KEY_PREV) {
-            Log_info0("Clicked previous");
-            reportData.keyCode1 = HID_KEYBOARD_DELETE; // backspace. del is del_fwd
-        }
-
-        HidDev_Report(HID_RPT_ID_KEY_IN,
-                      HID_REPORT_TYPE_INPUT,
-                      sizeof(reportData),
-                      (uint8_t*)&reportData);
-
-        // Release the key
-        reportData.keyCode1 = HID_KEYBOARD_RESERVED;
-        HidDev_Report(HID_RPT_ID_KEY_IN,
-                      HID_REPORT_TYPE_INPUT,
-                      sizeof(reportData),
-                      (uint8_t*)&reportData);
-    } else {
-        Log_warning1("Wierd value for Clicker_buttonPressedCB. keysPressed: %d", keysPressed);
-    }
 }
 
 /*********************************************************************
@@ -640,10 +695,10 @@ static void Clicker_processClkEvt(uint8_t keysPressed) {
  */
 static void Clicker_enqueueMsg(uint8_t event, uint8_t state)
 {
-  sbpEvt_t *pMsg;
+  clickerEvt_t *pMsg;
 
   // Create dynamic pointer to message.
-  if ((pMsg = ICall_malloc(sizeof(sbpEvt_t))))
+  if ((pMsg = ICall_malloc(sizeof(clickerEvt_t))))
   {
     pMsg->hdr.event = event;
     pMsg->hdr.state = state;
