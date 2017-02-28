@@ -1,12 +1,11 @@
 /******************************************************************************
 
- @file  simple_peripheral.c
+ @file  clicker.c
 
- @brief This file contains the Simple BLE Peripheral sample application for use
-        with the CC2650 Bluetooth Low Energy Protocol Stack.
+ @brief This file contains a BLE HID Clicker implementation,
+        based on the HID Keyboard service, Simple BLE Peripheral and Project zero examples from the Simplelink BLE SDK.
 
- Group: WCS, BTS
- Target Device: CC2650, CC2640, CC1350
+ Target Device: CC2650
 
  ******************************************************************************
  
@@ -300,7 +299,7 @@ static hidDevCB_t Clicker_CBs =
 /*********************************************************************
  * @fn      Clicker_createTask
  *
- * @brief   Task creation function for the Simple BLE Peripheral.
+ * @brief   Task creation function for the Clicker app.
  *
  * @param   None.
  *
@@ -439,7 +438,7 @@ static void Clicker_init(void)
 /*********************************************************************
  * @fn      Clicker_taskFxn
  *
- * @brief   Application task entry point for the Simple BLE Peripheral.
+ * @brief   Application task entry point for the Clicker app.
  *
  * @param   a0, a1 - not used.
  *
