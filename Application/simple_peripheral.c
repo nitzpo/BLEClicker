@@ -69,6 +69,7 @@
 #include "osal_snv.h"
 #include "gattservapp.h"
 #include "icall_apimsg.h"
+#include "gatt_profile_uuid.h"
 
 #include "util.h"
 
@@ -223,8 +224,6 @@ static uint8_t scanRspData[] =
   0       // 0dBm
 };
 
-// TODO: Add appearance AD type here
-
 // GAP - Advertisement data (max size = 31 bytes, though this is
 // best kept short to conserve power while advertisting)
 static uint8_t advertData[] =
@@ -236,15 +235,16 @@ static uint8_t advertData[] =
   GAP_ADTYPE_FLAGS,
   DEFAULT_DISCOVERABLE_MODE | GAP_ADTYPE_FLAGS_BREDR_NOT_SUPPORTED,
 
+  0x03,
+  GAP_ADTYPE_APPEARANCE, // 1 byte
+  GAP_APPEARE_HID_KEYBOARD,
   // service UUID, to notify central devices what services are included
   // in this peripheral
-//  0x03,   // length of this data
-//  GAP_ADTYPE_16BIT_MORE,      // some of the UUID's, but not all
-//  LO_UINT16(SIMPLEPROFILE_SERV_UUID),
-//  HI_UINT16(SIMPLEPROFILE_SERV_UUID)
+  0x03,   // length of this data
+  GAP_ADTYPE_16BIT_MORE,      // some of the UUID's, but not all
+  LO_UINT16(HID_SERV_UUID),
+  HI_UINT16(HID_SERV_UUID)
 };
-
-// TODO: Add HID Service UUID AD type
 
 // GAP GATT Attributes
 static uint8_t attDeviceName[GAP_DEVICE_NAME_LEN] = "Clicker";
