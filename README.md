@@ -2,16 +2,18 @@
 This was my project for the Advanced Computer Systems course at Tel Aviv University, Fall Semester 2016-17.
 
 ## Project Definition
-I chose the following project form the list of possible projects offered:
+I chose the following project from the list of possible projects offered:
 > Implement firmware that turns the Launchpad into a Bluetooth clicker (keyboard with just a few buttons, mainly forward and backward keys for presentations). Ideally the PC will recognize the launchpad as a Bluetooth keyboard in a way that does not require installing anything on the PC, not a driver and certainly not a program/process (because such configurations turn the project into a Windows/Linux/MacOS programming project, not an embedded/IoT project).
 
 ### Expectations
-I've expected this project to be quite simple, even though requiring some technical work. This was one of the reasons I also chose to do this project on my own (in addition to schedule concerns). I thought I could implement this from scratch.
+I've expected this project to be somewhat simple, while requiring extensive technical work. This was one of the reasons I also chose to do this project on my own (in addition to schedule concerns). I thought I could implement this from scratch.
 ### Outcomes
 I was proved to be very wrong.
-My expectation was not met. Operating the BLE device was a difficult operation and required a very large amount of time to get it to work. I also realized that the USB HID definition, and the HOGP (HID-over-GAP BLE Profile) definition were also very difficult to directly implement. So I went to use some libraries that came with the Simplelink BLE stack. This was still tough, and took dozens of hours to get to a "MVP"; a basic working product.
+My expectation was not met. Operating the BLE device was difficult and required a very large amount of time to get it to work. I also realized that the USB HID definition, and the HOGP (HID-over-GAP BLE Profile) definition were also severely out of the scope I planned in order to directly implement. So I went to use some libraries that came with the Simplelink BLE stack. This was still tough, and took dozens of hours to get to a "MVP"; a basic working product.
 
-Eventually, to my great relief and with strong persistance, I got the BLE HID device to work. Some of the hurdles I had to climb along the way to this are described in the "Problems and how I've overcame them" section of this document. I was very happy and felt satisfied, and then realized I still had to actually write some code... Which I did :)
+Eventually, to my great relief, and with strong persistance, I got the BLE HID device to work. Some of the hurdles I had to climb along the way to this are described in the "Problems and how I've overcame them" section of this document. I was very happy and felt satisfied, and then realized I still had to actually write some code... Which I did :)
+
+I've turned the CC2650-Launchpad into a HID keyboard. The Launchpad has two buttons. I configured the first as a spacebar click, and the second as a backspace click. Space goes forward in a slideshow and backspace goes backwards. Thus we get a slideshow clicker.
 
 ## Architecture Overview
 The application can be logically splitted into a few components and sub-components:
@@ -24,8 +26,8 @@ The application can be logically splitted into a few components and sub-componen
 - Clicking Functionality Implementation
 
 ### Code
-My code is based on the Project Zero example and stack projects (which were easy to set up), with the actual application code replaced with that of the SimpleBLEPeripheral example, that was simpler than Project Zero.
-In the code, I use the TI-implementation for the HID Device Profile and the HID Keyboard Service implementation. This gives me a new task with higher priority then the basic application task, that operates the GAP and GATT states, exporting callbacks.
+My code is based on the Project Zero example and stack projects (which were easy to set up), with the actual base application code replaced with that of the SimpleBLEPeripheral example, that was simpler than Project Zero.
+In the code, I use the TI implementation for the HID Device Profile and the HID Keyboard Service implementation. This gives me a new task with higher priority then the basic application task, that operates the GAP and GATT states, exporting callbacks.
 
 In my application context I handle the set up of the GAP and GATT, including connection parameters and more, and the actual key interaction and report sending.
 
@@ -35,7 +37,7 @@ An auditor is invited to browse the commits on this repo to view how the code ev
 Because of the fragility of the code and for convenience, I've set up this Git repository. Versioning actually helped me when I made changes that caused the device to stop advertising.
 
 ## Problems and how I've overcame them
-As previously noted, I had ALOT of problems throughout the project. I will try to list some of the major ones for reference.
+As previously noted, I had ALOT of problems throughout the project. I will try to list some of the major ones here for reference.
 
 ### Testing
 Before addressing the bugs related to testing and how I solved them, first lets describe the situation.
@@ -46,6 +48,8 @@ Debugging was also used to test specific code parts, but since there are only 4 
 I don't have a BLE sniffer device so I used my phone (LG G5) with a BLE Scanner app. This (usually) worked and allowed me to see how the services are functioning.
 
 Probably the **worst** problem I had in this project was that for a whole day of working on the project, I couldn't see the advertisements from the device. I thought this was something I'd changed so I started reverting things (Git helped) but no results. At some point I uploaded Project Zero to test if the board was working. And still nothing! I was nearly sure the board was dead. After hours of trying, my phone battery died and I replaced it with a spare. Then it worked! Apparently there is a bug in LG's BT!
+
+Later on, after addressing multiple other problems, I could test that everything worked on my phone - without requiring an actual PC dongle; this was due to the fact that I had set up spacebar and backspace buttons. My phone allowed me to connect the launchpad as a HID device, and in some text box I could then type spaces and delete them using the launchpad! So exciting!
 
 ### Debugging
 An issue I had with debugging:
@@ -72,7 +76,7 @@ I solved it by disabling compiler optimizations. The situation was that I wanted
  - Eventually I found a [guide for adding an RTOS task](http://processors.wiki.ti.com/index.php/Adding_Custom_RTOS_Task). Unfortunately, this was after I've already encountered and addressed the other issues. This guide explained that this predefined symbol had to be edited.
  
 ### HID
-Finally got the device to work, but a few seconds after connection is established I get disconnected and the device is not advertising. This was frustrating.
+Finally got the device to work, but a few seconds after a connection is established I get disconnected and the device is not advertising. This was frustrating.
 - I went over and debugged the HID device code, and realized that there was a HID_DEV_IDLE_TIMEOUT define set to 6000 (6s).
 - The device automatically disconnects after the specified idle time to save battery.
 - Another define, AUTO_ADV, is disabled by default. Setting it up meant that the HID device will restart advertising after loosing the connection. Since at this point I didn't write the report sending code yet, I increased the timeout and set AUTO_ADV=TRUE. That way I could use the device, and if the connection was lost I could reconnect.
