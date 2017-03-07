@@ -7,6 +7,7 @@ I chose the following project from the list of possible projects offered:
 
 ### Expectations
 I've expected this project to be somewhat simple, while requiring extensive technical work. This was one of the reasons I also chose to do this project on my own (in addition to schedule concerns). I thought I could implement this from scratch.
+
 ### Outcomes
 I was proved to be very wrong.
 My expectation was not met. Operating the BLE device was difficult and required a very large amount of time to get it to work. I also realized that the USB HID definition, and the HOGP (HID-over-GAP BLE Profile) definition were also severely out of the scope I planned in order to directly implement. So I went to use some libraries that came with the Simplelink BLE stack. This was still tough, and took dozens of hours to get to a "MVP"; a basic working product.
@@ -86,3 +87,9 @@ The USB [Device Class Definition for HID](http://www.usb.org/developers/hidpage/
 
 ### Connection Settings
 After getting everything to work (oh the relief), there was an annoying delay between clicks. This was caused becuase of the default BLE connection paramters set for Project Zero. Those did not fit well for the Clicker application. The changes can be viewed in [the commit](https://github.com/nitzpo/BLEClicker/commit/f478bee60f3078e5f2ac08ca178c05275e0dcd72).
+
+## Pictures
+![screenshot_2017-03-07-21-18-50](https://cloud.githubusercontent.com/assets/9297302/23674215/caf6bb32-037d-11e7-84aa-1e24a19f5160.png)
+![screenshot_2017-03-07-21-18-40](https://cloud.githubusercontent.com/assets/9297302/23674219/caf756d2-037d-11e7-96f5-6f2bbc628ff6.png)
+![screenshot_2017-03-07-21-19-39](https://cloud.githubusercontent.com/assets/9297302/23674218/caf762d0-037d-11e7-9d59-8fd3ea9dd3ef.png)
+![20170307_212014](https://cloud.githubusercontent.com/assets/9297302/23674217/caf763fc-037d-11e7-95db-9f60193a3670.jpg)
