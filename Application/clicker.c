@@ -70,6 +70,7 @@
 /* HOGP */
 #include "hiddev.h"
 #include "hidkbdservice.h"
+#include "battservice.h"
 
 #ifdef USE_RCOSC
 #include "rcosc_calibration.h"
@@ -91,18 +92,35 @@
 
 // Limited discoverable mode advertises for 30.72s, and then stops
 // General discoverable mode advertises indefinitely
-#define DEFAULT_DISCOVERABLE_MODE             GAP_ADTYPE_FLAGS_GENERAL
+// I set here LIMITED for better battery consumption when using the clicker on batteries.
+#define DEFAULT_DISCOVERABLE_MODE             GAP_ADTYPE_FLAGS_LIMITED
 
 // Minimum connection interval (units of 1.25ms, 80=100ms) if automatic
-// parameter update request is enabled
-#define DEFAULT_DESIRED_MIN_CONN_INTERVAL     80
+// parameter update request is enabled (and it is)
+// Can range from 6 (7.5ms) to 3200 (4s)
+// This affects power consumption
+// I choose the minimal, for best clicker latency.
+#define DEFAULT_DESIRED_MIN_CONN_INTERVAL     6
 
 // Maximum connection interval (units of 1.25ms, 800=1000ms) if automatic
 // parameter update request is enabled
-#define DEFAULT_DESIRED_MAX_CONN_INTERVAL     800
+// This is much lower then default for better clicker latency.
+#define DEFAULT_DESIRED_MAX_CONN_INTERVAL     40
 
 // Slave latency to use if automatic parameter update request is enabled
-#define DEFAULT_DESIRED_SLAVE_LATENCY         0
+/**
+    According to dev's guide (swru393) section 5.1.3:
+ *  Reducing the slave latency (or setting it to zero) does as follows:
+        * Increases the power consumption for the peripheral device
+        * Reduces the time for the peripheral device to receive the data sent from a central device
+ *  Increasing the slave latency does as follows:
+        * Reduces power consumption for the peripheral during periods when the peripheral has no data to send
+        to the central device
+        * Increases the time for the peripheral device to receive the data sent from the central device
+    So for our application we have no reason to keep it low, as we want to save power
+    and we have nearly to no data sent from the central to the peripheral.
+ */
+#define DEFAULT_DESIRED_SLAVE_LATENCY         40
 
 // Supervision timeout value (units of 10ms, 1000=10s) if automatic parameter
 // update request is enabled
@@ -125,15 +143,12 @@
 
 // Internal Events for RTOS application
 #define CLKR_STATE_CHANGE_EVT                  0x0001
-//#define CLKR_CHAR_CHANGE_EVT                   0x0002
-//#define CLKR_PERIODIC_EVT                      0x0004
 #define CLICKER_CLK_EVT                     0x0002
-#define CLKR_CONN_EVT_END_EVT                  0x0008
 
 /** HID Related **/
-// timeout in miliseconds. 0 disables timeout
-#define HID_DEV_IDLE_TIMEOUT  10000
-// 30 secs timeout. After 10 seconds disconnects. Once clicking a button, reconnects automatically.
+// timeout in ms. 0 disables timeout
+#define HID_DEV_IDLE_TIMEOUT  30000
+// After 30 seconds disconnects. Once clicking a button, reconnects automatically.
 
 
 /*********************************************************************
