@@ -12,7 +12,7 @@ I've expected this project to be somewhat simple, while requiring extensive tech
 I was proved to be very wrong.
 My expectation was not met. Operating the BLE device was difficult and required a very large amount of time to get it to work. I also realized that the USB HID definition, and the HOGP (HID-over-GAP BLE Profile) definition were also severely out of the scope I planned in order to directly implement. So I went to use some libraries that came with the Simplelink BLE stack. This was still tough, and took dozens of hours to get to a "MVP"; a basic working product.
 
-Eventually, to my great relief, and with strong persistance, I got the BLE HID device to work. Some of the hurdles I had to climb along the way to this are described in the "Problems and how I've overcame them" section of this document. I was very happy and felt satisfied, and then realized I still had to actually write some code... Which I did :)
+Eventually, to my great relief, and with strong persistance, I got the BLE HID device to work. Some of the hurdles I had to climb along the way to this are described in the "Problems and how I've overcome them" section of this document. I was very happy and felt satisfied, and then realized I still had to actually write some code... Which I did :)
 
 I've turned the CC2650-Launchpad into a HID keyboard. The Launchpad has two buttons. I configured the first as a spacebar click, and the second as a backspace click. Space goes forward in a slideshow and backspace goes backwards. Thus we get a slideshow clicker.
 
@@ -32,17 +32,16 @@ In the code, I use the TI implementation for the HID Device Profile and the HID 
 
 In my application context I handle the set up of the GAP and GATT, including connection parameters and more, and the actual key interaction and report sending.
 
-An auditor is invited to browse the commits on this repo to view how the code evolved over time. Take note that not all changes and bug fixes were commited separately, though I've tried to show those in commits.
+An auditor is invited to browse the commits on this repo to view how the code evolved over time. Take note that not all changes and bug fixes were commited separately, though I've tried to show those in commits. The most interesting code is in Application\clicker.c.
 
 ### Code Management
 Because of the fragility of the code and for convenience, I've set up this Git repository. Versioning actually helped me when I made changes that caused the device to stop advertising.
 
-## Problems and how I've overcame them
+## Problems and how I've overcome them
 As previously noted, I had ALOT of problems throughout the project. I will try to list some of the major ones here for reference.
 
 ### Testing
-Before addressing the bugs related to testing and how I solved them, first lets describe the situation.
-First of all I wanted to get the UART output to work. This was not trivial as one specifically has to setup UartLog for the device, and the Windows device has to be configured to the UART settings *in addition* to the terminal software (for my case, Putty).
+Firstly I wanted to get the UART output to work. This was not trivial as one specifically has to setup UartLog for the device, and the Windows device has to be configured to the UART settings *in addition* to the terminal software (for my case, Putty).
 
 Debugging was also used to test specific code parts, but since there are only 4 breakpoints it was not very useful for this case. In a different section I discuss debugging issues.
 
@@ -54,11 +53,13 @@ Later on, after addressing multiple other problems, I could test that everything
 
 ### Debugging
 An issue I had with debugging:
-I could place breakpoints in simple code, code from main.c and inside callbacks. But if I set breakpoints inside the profile code - it wasn't hit. I saw that the symbols are not even generated for the functions I want to break on. So I:
+I could place breakpoints in simple code, code from main.c and inside callbacks. But if I set breakpoints inside the profile code - the debugger didn't stop on them. I saw that the symbols are not even generated for the functions I want to break on (from the disassembly view). So I:
 - Searched in the TI forums and Google etc.
 - Asked in the course's Facebook group. They offered setting some compiler defines and changing compiler optimizations.
 - After searching some more using this information, I found some hints online, and realized what was the problem.
 I solved it by disabling compiler optimizations. The situation was that I wanted to break inside *static functions* that were only used once in the code and therefore inlined by the compiler. No optimizations means - no inlining.
+
+I have documented this issue in a [stackoverflow question](http://stackoverflow.com/questions/42657395/ti-simplelink-ble-debugging-cant-place-breakpoints-in-most-of-code).
 
 ### Horrible Memory Errors and Predefined Symbols
 - ICALL_MAX_NUM_TASKS had to be increased to 4. This defines how many tasks will be registered with ICall. My tasks are:
@@ -86,7 +87,7 @@ Finally got the device to work, but a few seconds after a connection is establis
 The USB [Device Class Definition for HID](http://www.usb.org/developers/hidpage/HID1_11.pdf) is not a very nice read (gently speaking). I found there the report data structure to send through the HID device, in the Device Class Definition for HID, Appendix B, section 1. [This guide from MBED documentation](https://docs.mbed.com/docs/ble-hid/en/latest/api/md_doc_HID.html) helped too.
 
 ### Connection Settings
-After getting everything to work (oh the relief), there was an annoying delay between clicks. This was caused becuase of the default BLE connection paramters set for Project Zero. Those did not fit well for the Clicker application. The changes can be viewed in [the commit](https://github.com/nitzpo/BLEClicker/commit/f478bee60f3078e5f2ac08ca178c05275e0dcd72).
+After getting everything to work (oh the relief..), there was an annoying delay between clicks. This was caused becuase of the default BLE connection paramters set for Project Zero. Those did not fit well for the Clicker application. The changes can be viewed in [the commit](https://github.com/nitzpo/BLEClicker/commit/f478bee60f3078e5f2ac08ca178c05275e0dcd72).
 
 ## Pictures
 ![screenshot_2017-03-07-21-18-50](https://cloud.githubusercontent.com/assets/9297302/23674215/caf6bb32-037d-11e7-84aa-1e24a19f5160.png)
