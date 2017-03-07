@@ -412,7 +412,12 @@ static void Clicker_init(void)
     GAPBondMgr_SetParameter(GAPBOND_BONDING_ENABLED, sizeof(uint8_t), &bonding);
   }
 
-  /** HidDev **/
+  {
+      uint8_t batteryCriticalLevel = 50; // in precentage
+      Batt_SetParameter(BATT_PARAM_CRITICAL_LEVEL, sizeof(uint8_t), &batteryCriticalLevel);
+  }
+
+  /** Hid Dev **/
   Log_info0("Registering Hid Device");
   HidDev_Register(&Clicker_hidDevCfg, &Clicker_CBs);
 
