@@ -150,7 +150,7 @@ int main()
   /* Start HidDev task */
   HidDev_createTask();
 
-  // ProjectZero_createTask();
+  /* Start Clicker Application Task */
   Clicker_createTask();
 
   /* enable interrupts and start SYS/BIOS */
